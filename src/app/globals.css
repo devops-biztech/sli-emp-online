@@ -1,0 +1,203 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-deep: var(--brand-gold-deep);
+  --color-brand-green: var(--brand-green);
+  --color-brand-green-deep: var(--brand-green-deep);
+  --color-brand-green-light: var(--brand-green-light);
+  --color-brand-green-tint: var(--brand-green-tint);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * Schmidbauer Lumber brand tokens, sampled from assets/sli-logo-color.png.
+ *   gold        #FCCC24   green        #24843C
+ *   deep green  #306030   light green  #90CC60
+ *
+ * Gold is a light color: it never carries white text. Anything on gold takes
+ * --brand-green-deep or near-black. Gold's role is progress and primary action;
+ * green's role is structure. See PRODUCT.md > Brand Commitments.
+ */
+:root {
+  --brand-gold: oklch(0.855 0.163 89.5);
+  --brand-gold-deep: oklch(0.72 0.152 78);
+  --brand-green: oklch(0.539 0.144 148.6);
+  --brand-green-deep: oklch(0.436 0.096 147.5);
+  --brand-green-light: oklch(0.79 0.145 137.5);
+  --brand-green-tint: oklch(0.968 0.018 148);
+
+  --background: oklch(0.985 0.004 120);
+  --foreground: oklch(0.185 0.012 150);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.185 0.012 150);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.185 0.012 150);
+  --primary: oklch(0.539 0.144 148.6);
+  --primary-foreground: oklch(0.99 0.005 120);
+  --secondary: oklch(0.968 0.018 148);
+  --secondary-foreground: oklch(0.436 0.096 147.5);
+  --muted: oklch(0.965 0.006 140);
+  --muted-foreground: oklch(0.505 0.018 150);
+  --accent: oklch(0.968 0.018 148);
+  --accent-foreground: oklch(0.436 0.096 147.5);
+  --destructive: oklch(0.523 0.207 27.3);
+  --border: oklch(0.905 0.01 145);
+  --input: oklch(0.888 0.012 145);
+  --ring: oklch(0.539 0.144 148.6);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  /*
+   * 16px floor on every control. Below this, iOS Safari zooms the viewport on
+   * focus and the applicant loses their place mid-form.
+   */
+  input,
+  select,
+  textarea {
+    font-size: max(1rem, 16px);
+  }
+}
+
+@layer components {
+  /*
+   * Applicants may tab through 100+ controls. The ring has to survive being
+   * seen that many times: green, offset, no glow.
+   */
+  .focus-brand {
+    @apply outline-none ring-[3px] ring-brand-green/45 border-brand-green;
+  }
+
+  /*
+   * The one authored motion in the app: each step arrives with a short
+   * settle. It reads as "a new page of the form", which is the whole
+   * premise — so it earns its place. Everything else stays still.
+   */
+  .animate-in-step {
+    animation: step-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,258 @@
+# SLI Employment Application — Field Inventory & Data Model
+
+**Status:** Confirmed by Luis Ruiz, 2026-08-04. This is the authoritative spec for the Phase 1 build.
+
+**Build status:** Phase 1 complete and verified end-to-end (desktop + mobile). All fields below are implemented. Encryption and DynamoDB remain deliberately stubbed — see `README.md`.
+
+**Sources reconciled:**
+1. `assets/SLI-Employment-Application.pdf` — the current paper form (5 pages, scanned)
+2. The sister-app DynamoDB record shape (81 applicant fields + 6 system fields)
+
+**Reconciliation decision (H): parity.** The schema is a superset — every sister-app field is present so records drop cleanly into the existing admin portal, plus every SLI-specific field from the PDF.
+
+---
+
+## Confirmed decisions
+
+| # | Decision | Resolution |
+|---|---|---|
+| A | Contact block | **Structured** into `primaryPhone` / `mailingAddress` / `city` / `state` / `zipCode`, using sister-app field names |
+| B | Email | **Added, optional.** Nothing not on the paper form is required |
+| C | Work experience entries | **Max 3** (1 current + 2 previous), matching sister apps |
+| D | "How soon available" | **Free text** — accepts "immediately", "2 weeks" |
+| E | Education | **Structured**, sister-app names as backbone + `Location`/`Dates` companions so the PDF's "dates of enrollment, cities and states" isn't lost |
+| F | Required fields | As marked below |
+| G | Middle name | `middleName`, optional, free text (an initial is a valid value) |
+| H | Parity scope | **Full parity**, including `ageVerified` (legal working age confirmation) and `relatedToCompanyEmployee` (transparency only) |
+| I | Signature | **Omitted.** Admin portal's PDF generator handles wet signature at interview. `documentLink` / `envelopeId` reserved as nullable for future e-sign |
+| J | Schema shape | **Nested arrays internally**, flattened by `toFlatRecord()` at the encryption boundary |
+| K | High school | **Included**, per parity — the PDF's "except for high school" was a paper-space concession, not policy |
+| L | Employment date entry | **Month + year dropdowns**, not `<input type="month">`. Rationale below under Step 7 |
+
+### Knock-on from (I)
+The EEO survey's own *"Signed / Date / Address / Phone"* block existed solely to authenticate the wet signature. With signatures removed it is dropped; the survey's substantive checkboxes remain. Address and phone were already captured in Step 1.
+
+### Recorded but not acted on
+- The survey intro references reporting on **"sex"** — but no sex/gender field exists anywhere on the PDF. **Not added.**
+- EEO race categories and the term **"Handicapped individual"** are 1970s-era and do not match current EEO-1 categories (no "Two or more races", no "Native Hawaiian/Pacific Islander", Hispanic treated as a race rather than a separate ethnicity question). **Built exactly as printed.** Flagged for HR compliance review as separate work.
+
+---
+
+## Legend
+
+✅ required · ⬜ optional · ⚡ conditionally required · 🔒 system (no UI)
+
+---
+
+## System fields — 🔒 no UI
+
+| Field | Type | Value |
+|---|---|---|
+| `id` | string | generated UUID |
+| `package` | string \| null | reserved |
+| `companyName` | string | constant `"SLI"` |
+| `date` | ISO date string | autofilled at load, **not editable** |
+| `documentLink` | string \| null | reserved for e-sign |
+| `envelopeId` | string \| null | reserved for e-sign |
+| `receivedByCompany` | boolean | default `false`, admin-managed |
+| `dismissApplicant` | boolean | default `false`, admin-managed |
+
+---
+
+## Step 1 — Your Information
+
+| Field | Type | Req | Validation |
+|---|---|---|---|
+| `lastName` | text | ✅ | 1–50 chars |
+| `firstName` | text | ✅ | 1–50 chars |
+| `middleName` | text | ⬜ | max 50 |
+| `primaryPhone` | tel | ✅ | US 10-digit, formatted on blur |
+| `secondaryPhone` | tel | ⬜ | US 10-digit |
+| `email` | email | ⬜ | RFC-ish email |
+| `mailingAddress` | text | ✅ | |
+| `city` | text | ✅ | |
+| `state` | select | ✅ | US states + territories, default CA |
+| `zipCode` | text | ✅ | 5 or 5+4 |
+
+## Step 2 — Position & Availability
+
+| Field | Type | Req | Notes |
+|---|---|---|---|
+| `applicationPosition` | text | ✅ | PDF: "Job applied for" |
+| `howSoonAvailable` | text | ✅ | PDF: "How soon are you available for employment?" |
+| `employmentTypeSought` | string[] | ✅ | min 1 — Full-time, Part-time, Temporary, Summer. Checkboxes on paper, so multi-select |
+| `shiftsAvailable` | string[] | ✅ | min 1 — Day, Swing, Night, Rotating |
+| `availableForAnyShift` | boolean | 🔒 | **derived**: true when all four shifts selected. Not a separate question |
+| `availableWeekends` | boolean | ✅ | sister-app field, Yes/No |
+| `ageVerified` | boolean | ✅ | "I am of legal age to work." Must be checked |
+
+## Step 3 — Schmidbauer History
+
+| Field | Type | Req | Conditional |
+|---|---|---|---|
+| `previouslyEmployedByCompany` | radio Y/N | ✅ | |
+| `datesPreviouslyEmployed` | text | ⚡ | required iff `previouslyEmployedByCompany` = Yes |
+| `positionsPreviouslyHeld` | text | ⚡ | required iff Yes. PDF: "In what job position(s)?" |
+| `relatedToCompanyEmployee` | radio Y/N | ✅ | |
+| `relatedTo` | text | ⚡ | required iff `relatedToCompanyEmployee` = Yes |
+
+## Step 4 — Education: High School & College
+
+All optional. PDF asks for names, **dates of enrollment, cities and states**.
+
+| Field | Type | Req |
+|---|---|---|
+| `highschoolName` | text | ⬜ |
+| `highschoolLocation` | text | ⬜ |
+| `hsGradStatus` | select | ⬜ — Graduated / GED / Currently attending / Did not graduate |
+| `colleges[0..2].name` | text | ⬜ |
+| `colleges[0..2].location` | text | ⬜ |
+| `colleges[0..2].dates` | text | ⬜ |
+| `colleges[0..2].courseOfStudy` | text | ⬜ |
+| `colleges[0..2].degree` | text | ⬜ |
+
+Repeatable, add/remove, max 3. `location` and `dates` are the PDF-fidelity additions.
+
+## Step 5 — Trade Schools & Licenses
+
+All optional.
+
+| Field | Type | Req |
+|---|---|---|
+| `tradeSchools[0..2].name` | text | ⬜ |
+| `tradeSchools[0..2].location` | text | ⬜ |
+| `tradeSchools[0..2].dates` | text | ⬜ |
+| `tradeSchools[0..2].courseOfStudy` | text | ⬜ |
+| `tradeSchools[0..2].certificate` | text | ⬜ |
+| `licenses[0..2].name` | text | ⬜ |
+| `licenses[0..2].issuedBy` | text | ⬜ |
+| `licenses[0..2].expirationDate` | date | ⬜ |
+
+Both repeatable, add/remove, max 3 each.
+
+## Step 6 — Skills & Experience
+
+Three compact textareas (4 rows each), verbatim PDF prompts. All optional.
+
+| Field | Prompt |
+|---|---|
+| `training` | "Have you completed any training or classes relevant to the job for which you are applying? (Examples: On-the-job safety training, military training, production training, etc.) Be specific." |
+| `specialSkills` | "Do you have any special skills or experiences that are relevant to the job for which you are applying? (Examples: Experience operating plant or office machines, computer skills, experience in warehouse jobs, skills in maintaining or repairing office or plant machines, etc.) Be specific." |
+| `experienceAndActivities` | "We want employees to advance. Describe any job experience, school or other activities that demonstrate your desire and ability to advance or learn new skills." |
+
+## Step 7 — Work Experience — 🔁 repeatable, max 3
+
+Index 0 = current/most recent → flattens to `current*`. Indices 1–2 → `previousOne*` / `previousTwo*`.
+PDF: *"Please list your work experience beginning with your most recent job held. If you were self-employed, give company name."*
+
+| Field (per entry) | Type | Req |
+|---|---|---|
+| `employer` | text | ✅ |
+| `employerAddress` | textarea | ✅ |
+| `employerPhone` | tel | ⬜ |
+| `supervisorName` | text | ⬜ |
+| `employmentDateFrom` | month + year selects | ✅ |
+| `employmentDateTo` | month + year selects | ✅ |
+| `jobTitle` | text | ✅ |
+| `hrsPerWeek` | number | ⬜ |
+| `dutiesPerformed` | textarea | ⬜ |
+| `reasonForLeaving` | text | ✅ |
+| `mayWeContactEmployer` | radio Y/N | ✅ |
+| `mayWeContactReason` | textarea | ⚡ required iff `mayWeContactEmployer` = No |
+
+**Min 1 entry required.** Validation: `To` ≥ `From`, neither in the future.
+
+`mayWeContactReason` is the PDF's *"No, because (please state reason)"* — additive to the sister schema, which stores the boolean only. The PDF asks contact permission once for the present employer; sister apps ask per-employer, so per-entry wins under parity.
+
+`employmentDateFrom`/`To` flatten to a single `…EmploymentDates` string as `"MM/YYYY – MM/YYYY"`.
+
+**Date entry (decision L, 2026-08-04).** Stored as `YYYY-MM`, but collected via two
+dropdowns rather than `<input type="month">`. The native control's typed format
+varies by browser and locale — Chrome expects segment entry, Firefox degrades to
+a bare text box — so an applicant typing `04/2020` or `April 2020` was rejected
+with no way to discover the expected format. Dropdowns remove the guess entirely
+and need no keyboard on a phone. A half-answer (month picked, year not) is held
+as a deliberately invalid marker so it can be reported as "Choose both a month
+and a year" rather than silently passing.
+
+## Step 8 — References — 🔁 exactly 3
+
+PDF: *"Please list three references who can provide us with information about your qualifications to perform the job for which you are applying. Business or job-related references are preferable."*
+
+| Field (per entry) | Type | Req |
+|---|---|---|
+| `name` | text | ✅ |
+| `address` | text | ✅ |
+| `telephone` | tel | ✅ |
+| `occupation` | text | ✅ |
+
+**Not present in the sister-app schema** — new field names required in the admin portal.
+
+## Step 9 — Review & Certify
+
+Read-only summary of every section with an "Edit" link per section that jumps to that step.
+
+| Field | Type | Req |
+|---|---|---|
+| `agreeToTerms` | checkbox | ✅ |
+
+The full certification text from PDF page 4 renders verbatim above the checkbox: accuracy attestation; refusal or termination for false, inaccurate, incomplete or misleading information; authorization to verify employment, education, character and qualifications; release of all entities from liability; agreement to conform to company rules, policies and procedures; and acknowledgement of **at-will employment**.
+
+No signature field — see Decision I.
+
+## Step 10 — Voluntary Affirmative Action Survey — ⚪ entirely optional
+
+PDF page 5. Header: **"ALL ANSWERS ARE VOLUNTARY ONLY."** Rendered visually distinct, positioned after certification, with a prominent Skip control. Displays the PDF's own assurance verbatim: *"Failure to provide this information will not jeopardize or adversely affect your consideration for employment."*
+
+| Field | Type | Req | Options |
+|---|---|---|---|
+| `eeoRacialEthnic` | radio | ⬜ | White, Black, Hispanic, American/Alaskan Indian, Asian |
+| `eeoVeteran` | radio Y/N | ⬜ | |
+| `eeoSelfIdentification` | string[] | ⬜ | Handicapped individual, Disabled veteran, Vietnam era veteran |
+
+**Not present in the sister-app schema** — new field names required in the admin portal.
+
+No field on this step may block submission. The step must be completable while entirely empty.
+
+---
+
+## Step map
+
+| Step | Title | Weight |
+|---|---|---|
+| 1 | Your Information | light |
+| 2 | Position & Availability | light |
+| 3 | Schmidbauer History | very light, conditional |
+| 4 | Education — High School & College | repeatable |
+| 5 | Trade Schools & Licenses | repeatable |
+| 6 | Skills & Experience | 3 compact textareas |
+| 7 | Work Experience 🔁 | one card at a time |
+| 8 | References | compact, ×3 |
+| 9 | Review & Certify | summary + edit links |
+| 10 | Voluntary Survey ⚪ | skippable |
+
+---
+
+## Submission pipeline
+
+```
+FormValues (nested, Zod-validated)
+  └─ toFlatRecord()        ← single adapter; the only place that knows sister-app field names
+      └─ ApplicationRecord (flat, 87 fields)
+          └─ encrypt()     ← STUB: pass-through today, real crypto drops in here
+              └─ POST /api/applications  ← STUB: accepts opaque blob, returns { success, id }
+                  └─ DynamoDB            ← NOT IMPLEMENTED
+```
+
+The endpoint never inspects or destructures payload fields — it will only ever see ciphertext.
+
+## Brand tokens
+
+Sampled from `assets/sli-logo-color.png`:
+
+| Token | Hex |
+|---|---|
+| Gold (primary) | `#FCCC24` |
+| Green (secondary) | `#24843C` |
+| Deep green | `#306030` |
+| Light green | `#90CC60` |

@@ -36,15 +36,17 @@ Not a job board or an ATS. A single company's application form, replacing one sp
 ## Capabilities and Constraints
 
 - **10 steps**, one logical section each. Per-step validation; the user cannot advance past invalid required fields.
-- Repeatable sections: colleges (≤3), trade schools (≤3), licenses (≤3), work experience (≥1, ≤3), references (exactly 3).
+- Repeatable sections: colleges (≤3), trade schools (≤3), licenses (≤3), work experience (≥1, ≤3), references (3 slots, 1 required — changed 2026-08-05).
 - Conditional fields driven by prior answers.
 - Final review step: read-only summary, per-section edit links, certification checkbox.
 - Voluntary EEO survey is **legally segregated**, entirely optional, and may never block submission.
 - WCAG AA. Real `<label>`s, full keyboard navigation, ARIA on the stepper and error messages, visible focus.
-- Submission is **scaffolded only**: assemble typed schema → `toFlatRecord()` → stubbed `encrypt()` pass-through → stubbed endpoint accepting an opaque blob. No real encryption, no DynamoDB. The endpoint must never inspect or destructure payload fields, because in production it only ever sees ciphertext.
+- Submission: assemble typed schema → `toFlatRecord()` → `encrypt()` → endpoint → DynamoDB. Encryption is real (tweetnacl `box`, ephemeral sender keypair per submission, encrypted to the admin portal's public key) and persistence writes the opaque envelope to the shared `storages` table. The endpoint must never inspect or destructure payload fields — it *cannot*, since the payload is encrypted to the portal's key rather than this server's.
 - The complete confirmed field inventory and data model lives in `FIELD-INVENTORY.md`. It is authoritative; this file does not duplicate it.
 
-**Delivery status (2026-08-04):** Phase 1 shipped. All 10 steps built and verified end-to-end at desktop and mobile widths. Encryption and DynamoDB remain stubbed pending confirmation that the data model captures everything.
+**Delivery status (2026-08-05):** Phases 1 and 2 shipped. All 10 steps built and verified end-to-end at desktop and mobile widths. Encryption and DynamoDB persistence are implemented and verified against the real `storages` table, decrypting through the admin portal's own module.
+
+Keys were regenerated 2026-08-05 and the pair is verified: this app holds only `SLI_PUB`, the portal holds both halves. One blocker remains before applicants can be pointed at this form — the `mill-jobs-portal-v2` decrypt change must be committed and deployed. Tracked in `README.md`.
 
 ## Brand Commitments
 

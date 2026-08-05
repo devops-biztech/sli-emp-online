@@ -105,7 +105,6 @@ export function StepReview({ onEdit }: ReviewProps) {
       <Section id="personal" onEdit={onEdit}>
         <Row label="Name" value={fullName} />
         <Row label="Primary phone" value={v.primaryPhone} />
-        <Row label="Other phone" value={v.secondaryPhone} />
         <Row label="Email" value={v.email} />
         <Row
           label="Address"

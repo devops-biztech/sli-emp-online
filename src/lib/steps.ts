@@ -46,7 +46,8 @@ export const STEPS: StepDefinition[] = [
       "lastName",
       "middleName",
       "primaryPhone",
-      "secondaryPhone",
+      // `secondaryPhone` is intentionally absent: no input renders for it, so
+      // there is nothing to validate or focus. It still ships in the record.
       "email",
       "mailingAddress",
       "city",

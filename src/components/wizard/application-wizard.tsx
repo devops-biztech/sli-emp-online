@@ -16,7 +16,7 @@ import {
   type ApplicationValues,
 } from "@/lib/schema";
 import { toFlatRecord } from "@/lib/flatten";
-import { encrypt } from "@/lib/encryption";
+import { encrypt, parsePublicKey, toSubmission } from "@/lib/encryption";
 
 import { StepPersonal } from "@/components/steps/step-personal";
 import { StepPosition } from "@/components/steps/step-position";
@@ -52,7 +52,12 @@ function focusFirstInvalid(root: HTMLElement | null) {
   target.focus({ preventScroll: true });
 }
 
-export function ApplicationWizard() {
+interface ApplicationWizardProps {
+  /** The admin portal's public key, space-separated bytes. Public by design. */
+  portalPublicKey: string;
+}
+
+export function ApplicationWizard({ portalPublicKey }: ApplicationWizardProps) {
   const [current, setCurrent] = React.useState(0);
   const [furthest, setFurthest] = React.useState(0);
   const [submitState, setSubmitState] = React.useState<SubmitState>({
@@ -116,14 +121,15 @@ export function ApplicationWizard() {
         // 1. Assemble the typed schema into one flat serializable record.
         const record = toFlatRecord(values);
 
-        // 2. Encrypt client-side. STUBBED — see src/lib/encryption.ts.
-        const payload = await encrypt(record);
+        // 2. Encrypt to the portal's public key, in the browser. From here on
+        //    the plaintext exists nowhere but this tab.
+        const envelope = await encrypt(record, parsePublicKey(portalPublicKey));
 
-        // 3. Relay ciphertext. The endpoint never sees plaintext fields.
+        // 3. Relay ciphertext. Our own server cannot read it either.
         const response = await fetch("/api/applications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(toSubmission(envelope)),
         });
 
         const result = (await response.json()) as {
@@ -147,7 +153,7 @@ export function ApplicationWizard() {
         });
       }
     },
-    [],
+    [portalPublicKey],
   );
 
   /** On a failed full-form validation, jump to the step that owns the error. */
@@ -174,9 +180,9 @@ export function ApplicationWizard() {
 
   /** Clears any partial survey answers, then submits. */
   const skipSurveyAndSubmit = () => {
-    form.setValue("eeoRacialEthnic", "");
+    form.setValue("eeoRacialEthnic", []);
+    form.setValue("eeoSex", "");
     form.setValue("eeoVeteran", "");
-    form.setValue("eeoSelfIdentification", []);
     runSubmit();
   };
 

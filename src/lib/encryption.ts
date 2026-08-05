@@ -1,94 +1,147 @@
 /**
  * ┌──────────────────────────────────────────────────────────────────────┐
- * │  CLIENT-SIDE ENCRYPTION HOOK — STUBBED                               │
+ * │  CLIENT-SIDE ENCRYPTION                                              │
  * │                                                                      │
- * │  This is the seam where real end-to-end encryption drops in. Today   │
- * │  `encrypt()` is a pass-through that only base64-encodes, so the      │
- * │  pipeline is fully wired and testable without any crypto.            │
+ * │  Real end-to-end encryption to the admin portal, using tweetnacl     │
+ * │  `box` (Curve25519 + XSalsa20-Poly1305) — the same primitive the     │
+ * │  portal already decrypts with for the other mills.                   │
  * │                                                                      │
- * │  DO NOT put real encryption anywhere else. The contract below is     │
- * │  the whole integration surface:                                      │
+ * │  The one deliberate difference from the older sister apps: the       │
+ * │  sender keypair is EPHEMERAL, generated fresh per submission and     │
+ * │  discarded immediately after. This is the sealed-box construction.   │
  * │                                                                      │
- * │      assemble → encrypt(payload) → POST ciphertext → store           │
+ * │  Why it matters: `nacl.box` needs a sender secret key. The older     │
+ * │  apps satisfied that by shipping a long-lived one to the browser,    │
+ * │  which put every mill's secret key in public page source. An         │
+ * │  ephemeral key means this client holds only the portal's PUBLIC      │
+ * │  key — safe to ship — and nothing here can decrypt anything.         │
  * │                                                                      │
- * │  When implementing for real:                                         │
- * │    1. Fetch/pin the admin portal's public key.                       │
- * │    2. Generate a fresh AES-GCM content key per submission.           │
- * │    3. Encrypt the JSON with it; wrap the content key with the        │
- * │       portal's public key (RSA-OAEP or ECDH via WebCrypto).          │
- * │    4. Return the wrapped key + IV + ciphertext in `EncryptedPayload`.│
- * │    5. Bump `algorithm` so the portal can route by version.           │
+ * │  The ephemeral public key travels in the envelope so the portal can  │
+ * │  decrypt; it is public by construction and carries no secret.        │
+ * │                                                                      │
+ * │      assemble → encrypt(record, portalPublicKey) → POST → store      │
  * │                                                                      │
  * │  Nothing downstream — the endpoint, the transport, the datastore —   │
- * │  may ever read inside `ciphertext`. That is the point.               │
+ * │  can read inside `cipher_text`. Not even this app's own server.      │
  * └──────────────────────────────────────────────────────────────────────┘
  */
+import nacl from "tweetnacl";
+
 import type { ApplicationRecord } from "./flatten";
 
+/** Company code the portal routes on to pick a decryption keypair. */
+export const COMPANY_CODE = "SLI";
+
 /**
- * The envelope that travels over the wire. Deliberately opaque: the only
- * plaintext is routing metadata the server needs to store the blob at all.
+ * The envelope inside `package`. Field names are inherited from the sister
+ * apps so the portal's existing parser reads them unchanged — `cipher_text`
+ * and `one_time_code` (the nonce) are load-bearing spellings, not choices.
+ *
+ * Byte arrays are plain JSON arrays. The portal rebuilds them with
+ * `Object.values()`, which handles arrays and the older apps' numeric-keyed
+ * objects identically, so this stays compatible while being about half
+ * the size on the wire.
  */
-export interface EncryptedPayload {
-  /** Bump when the scheme changes so the portal can route by version. */
-  algorithm: "none-passthrough-v0" | "aes-gcm-256-rsa-oaep-v1";
+export interface EncryptedEnvelope {
+  /** Lets the portal tell ephemeral-sender records from the legacy ones. */
+  algorithm: "nacl-box-ephemeral-v1";
   /** Schema version of the *plaintext* inside, for portal-side migrations. */
   schemaVersion: 1;
-  /** Base64. Opaque to every consumer. */
-  ciphertext: string;
-  /** Base64 initialization vector. Empty while stubbed. */
-  iv: string;
-  /** Base64 content key wrapped with the portal's public key. Empty while stubbed. */
-  encryptedKey: string;
-  /** Identifies which portal keypair to decrypt with. Null while stubbed. */
-  keyId: string | null;
-  /** Client-side timestamp; the server records its own receipt time too. */
-  submittedAt: string;
-}
-
-function toBase64(input: string): string {
-  const bytes = new TextEncoder().encode(input);
-  let binary = "";
-  bytes.forEach((b) => {
-    binary += String.fromCharCode(b);
-  });
-  return btoa(binary);
+  /** Opaque to every consumer. */
+  cipher_text: number[];
+  /** The 24-byte nonce. Named for the sister apps' wire format. */
+  one_time_code: number[];
+  /** Ephemeral public key for this one submission. Public by construction. */
+  sender_public_key: number[];
 }
 
 /**
- * STUB. Serializes and base64-encodes — no confidentiality whatsoever.
+ * What actually gets POSTed. `date` and `companyName` are plaintext routing
+ * metadata — the portal needs the company code to choose a keypair, and it
+ * cannot read the ciphertext to find it. They reveal only that *somebody*
+ * applied to SLI at a given time, never who.
+ */
+export interface Submission {
+  date: string;
+  companyName: string;
+  /** JSON-stringified `EncryptedEnvelope`. */
+  package: string;
+}
+
+/**
+ * Parses the portal's key format: 32 space-separated byte values, e.g.
+ * "244 203 31 ...". Kept identical to `keys.ts` in the portal so one
+ * env var can be copied between the two without reformatting.
+ */
+export function parsePublicKey(raw: string | undefined): Uint8Array {
+  if (!raw?.trim()) {
+    throw new Error(
+      "Missing the portal public key. Set SLI_PUB in the environment.",
+    );
+  }
+
+  const bytes = raw.trim().split(/\s+/).map(Number);
+
+  if (bytes.some((b) => !Number.isInteger(b) || b < 0 || b > 255)) {
+    throw new Error("SLI_PUB is not a space-separated list of byte values.");
+  }
+  if (bytes.length !== nacl.box.publicKeyLength) {
+    throw new Error(
+      `SLI_PUB must be ${nacl.box.publicKeyLength} bytes, got ${bytes.length}.`,
+    );
+  }
+
+  return new Uint8Array(bytes);
+}
+
+/**
+ * Encrypts one application to the portal's public key.
  *
- * The async signature is deliberate: WebCrypto is promise-based, so the real
- * implementation slots in here without touching a single caller.
+ * The ephemeral secret key exists only inside this function and is zeroed
+ * before returning, so a heap snapshot taken afterwards cannot recover it.
+ * That is belt-and-braces: even if it leaked it would compromise exactly
+ * one submission, which is the whole point of it being ephemeral.
  */
 export async function encrypt(
   record: ApplicationRecord,
-): Promise<EncryptedPayload> {
-  const plaintext = JSON.stringify(record);
+  portalPublicKey: Uint8Array,
+): Promise<EncryptedEnvelope> {
+  const plaintext = new TextEncoder().encode(JSON.stringify(record));
 
-  // ── REPLACE FROM HERE ──────────────────────────────────────────────
-  const ciphertext = toBase64(plaintext);
-  // ── TO HERE ────────────────────────────────────────────────────────
+  const ephemeral = nacl.box.keyPair();
+  const nonce = nacl.randomBytes(nacl.box.nonceLength);
 
-  return {
-    algorithm: "none-passthrough-v0",
-    schemaVersion: 1,
-    ciphertext,
-    iv: "",
-    encryptedKey: "",
-    keyId: null,
-    submittedAt: new Date().toISOString(),
-  };
+  try {
+    const cipherText = nacl.box(
+      plaintext,
+      nonce,
+      portalPublicKey,
+      ephemeral.secretKey,
+    );
+
+    // nacl.box returns null only on malformed key material.
+    if (!cipherText) {
+      throw new Error("Encryption failed. The portal key may be invalid.");
+    }
+
+    return {
+      algorithm: "nacl-box-ephemeral-v1",
+      schemaVersion: 1,
+      cipher_text: Array.from(cipherText),
+      one_time_code: Array.from(nonce),
+      sender_public_key: Array.from(ephemeral.publicKey),
+    };
+  } finally {
+    ephemeral.secretKey.fill(0);
+    plaintext.fill(0);
+  }
 }
 
-/** Mirror of `encrypt`, for local verification only. Never runs in production. */
-export function decryptStub(payload: EncryptedPayload): ApplicationRecord {
-  if (payload.algorithm !== "none-passthrough-v0") {
-    throw new Error(
-      `decryptStub cannot read '${payload.algorithm}'. Use the real client.`,
-    );
-  }
-  const binary = atob(payload.ciphertext);
-  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-  return JSON.parse(new TextDecoder().decode(bytes)) as ApplicationRecord;
+/** Wraps an envelope in the outer record the submit endpoint stores. */
+export function toSubmission(envelope: EncryptedEnvelope): Submission {
+  return {
+    date: new Date().toISOString(),
+    companyName: COMPANY_CODE,
+    package: JSON.stringify(envelope),
+  };
 }

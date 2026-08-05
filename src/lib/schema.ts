@@ -35,11 +35,12 @@ const requiredPhone = (label: string) =>
       message: "Enter a 10-digit phone number.",
     });
 
-const optionalEmail = z
+const requiredEmail = z
   .string()
   .trim()
-  .refine((v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
-    message: "Enter a valid email address, or leave this blank.",
+  .min(1, { message: "Email address is required." })
+  .refine((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+    message: "Enter a valid email address.",
   });
 
 const zipShape = z
@@ -95,19 +96,50 @@ export const HS_GRAD_STATUS = [
  * current EEO-1 reporting categories — see FIELD-INVENTORY.md. Reproduced
  * exactly as printed pending HR compliance review; do not "modernize" here.
  */
+/**
+ * Combined race and ethnicity, following the 2024 revision to OMB Statistical
+ * Policy Directive 15: one multi-select question rather than a separate
+ * Hispanic-ethnicity question, with Middle Eastern or North African as a
+ * category distinct from White.
+ *
+ * Adopted ahead of the EEO-1's own changeover (deadline 28 Sep 2029) because
+ * applicant data does not feed the EEO-1 — that report is built from employee
+ * records — so there is nothing to keep in lockstep with. See
+ * EEO-SURVEY-REVIEW.md.
+ *
+ * No "prefer not to answer" option: this is a multi-select where selecting
+ * nothing already means exactly that, and an explicit decline that can be
+ * ticked alongside "Asian" would be incoherent. The step's intro says the
+ * page may be left blank.
+ */
 export const EEO_RACIAL_ETHNIC = [
-  "White",
-  "Black",
-  "Hispanic",
-  "American/Alaskan Indian",
+  "American Indian or Alaska Native",
   "Asian",
+  "Black or African American",
+  "Hispanic or Latino",
+  "Middle Eastern or North African",
+  "Native Hawaiian or Other Pacific Islander",
+  "White",
 ] as const;
 
-/** Verbatim from PDF page 5. Same caveat as above. */
-export const EEO_SELF_IDENTIFICATION = [
-  "Handicapped individual",
-  "Disabled veteran",
-  "Vietnam era veteran",
+/**
+ * Single-select, so an explicit decline is offered and worth recording.
+ * The EEO-1 itself is binary; whether to offer a non-binary option is an HR
+ * policy decision, not a technical one — see EEO-SURVEY-REVIEW.md.
+ */
+export const EEO_SEX = ["Male", "Female", "I prefer not to answer"] as const;
+
+/**
+ * Plain-language veteran question. NOT the VEVRAA protected-veteran
+ * categories, which apply only to federal contractors — a status SLI has not
+ * confirmed. If SLI turns out to be a covered contractor, this question needs
+ * replacing with the VEVRAA categories and the disability question needs
+ * restoring. See EEO-SURVEY-REVIEW.md.
+ */
+export const EEO_VETERAN = [
+  "I identify as a veteran of the U.S. Armed Forces",
+  "I am not a veteran",
+  "I prefer not to answer",
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -170,12 +202,52 @@ export const employmentSchema = z
     }
   });
 
+/**
+ * Field-level shape only. Whether a given slot must be filled is decided at
+ * the array level in `applicationSchema` — the first reference is required,
+ * the other two are optional. `phoneShape` still enforces 10 digits on
+ * anything actually typed.
+ */
 export const referenceSchema = z.object({
-  name: required("Name"),
-  address: required("Address"),
-  telephone: requiredPhone("Telephone"),
-  occupation: required("Occupation"),
+  name: z.string().trim(),
+  address: z.string().trim(),
+  telephone: phoneShape,
+  occupation: z.string().trim(),
 });
+
+const REFERENCE_FIELDS = [
+  ["name", "Name"],
+  ["address", "Address"],
+  ["telephone", "Telephone"],
+  ["occupation", "Occupation"],
+] as const;
+
+/**
+ * Reference 1 is required. References 2 and 3 may be left entirely blank —
+ * but once any field in one is filled, the rest of that reference is
+ * required too. A name with no phone number is of no use to whoever is
+ * calling references, so a half-filled slot is treated as an error rather
+ * than quietly accepted.
+ */
+const referencesSchema = z
+  .array(referenceSchema)
+  .length(3)
+  .superRefine((refs, ctx) => {
+    refs.forEach((ref, index) => {
+      const started = REFERENCE_FIELDS.some(([key]) => ref[key].trim() !== "");
+      if (index !== 0 && !started) return;
+
+      for (const [key, label] of REFERENCE_FIELDS) {
+        if (ref[key].trim() === "") {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index, key],
+            message: `${label} is required.`,
+          });
+        }
+      }
+    });
+  });
 
 /* ------------------------------------------------------------------ */
 /* The application                                                     */
@@ -188,8 +260,15 @@ export const applicationSchema = z
     lastName: required("Last name").max(50),
     middleName: z.string().trim().max(50),
     primaryPhone: requiredPhone("Primary phone"),
+    /*
+     * No input renders for `secondaryPhone` — it was removed from the form.
+     * The field stays in the schema, in `defaultValues`, and in
+     * `toFlatRecord()` so the record shape the portal receives is unchanged;
+     * it simply always submits as "". Do not delete it without coordinating
+     * a portal-side change.
+     */
     secondaryPhone: phoneShape,
-    email: optionalEmail,
+    email: requiredEmail,
     mailingAddress: required("Mailing address"),
     city: required("City"),
     state: required("State"),
@@ -240,7 +319,7 @@ export const applicationSchema = z
       .max(3),
 
     /* Step 8 — References */
-    references: z.array(referenceSchema).length(3),
+    references: referencesSchema,
 
     /* Step 9 — Certify */
     agreeToTerms: z.literal(true, {
@@ -250,9 +329,13 @@ export const applicationSchema = z
     }),
 
     /* Step 10 — Voluntary survey. Every field optional, always. */
-    eeoRacialEthnic: z.string().trim(),
+    /*
+     * All optional, always. Nothing on this step may block submission —
+     * see the `optional: true` step definition and `skipSurveyAndSubmit`.
+     */
+    eeoRacialEthnic: z.array(z.enum(EEO_RACIAL_ETHNIC)),
+    eeoSex: z.string().trim(),
     eeoVeteran: z.string().trim(),
-    eeoSelfIdentification: z.array(z.enum(EEO_SELF_IDENTIFICATION)),
   })
   .superRefine((app, ctx) => {
     if (app.previouslyEmployedByCompany === "yes") {
@@ -377,7 +460,7 @@ export const defaultValues = {
 
   agreeToTerms: false,
 
-  eeoRacialEthnic: "",
+  eeoRacialEthnic: [],
+  eeoSex: "",
   eeoVeteran: "",
-  eeoSelfIdentification: [],
 } as unknown as ApplicationValues;

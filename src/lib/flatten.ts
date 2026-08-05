@@ -76,9 +76,10 @@ export interface ApplicationRecord {
   agreeToTerms: boolean;
 
   /* Voluntary survey (no sister-app equivalent) */
+  /** Comma-joined multi-select. */
   eeoRacialEthnic: string;
+  eeoSex: string;
   eeoVeteran: string;
-  eeoSelfIdentification: string;
 
   /* Indexed groups are declared via the index signature below. */
   [key: string]: string | boolean | null;
@@ -282,8 +283,8 @@ export function toFlatRecord(values: ApplicationValues): ApplicationRecord {
     agreeToTerms: values.agreeToTerms === true,
 
     /* Voluntary survey */
-    eeoRacialEthnic: values.eeoRacialEthnic,
+    eeoRacialEthnic: values.eeoRacialEthnic.join(", "),
+    eeoSex: values.eeoSex,
     eeoVeteran: values.eeoVeteran,
-    eeoSelfIdentification: values.eeoSelfIdentification.join(", "),
   };
 }

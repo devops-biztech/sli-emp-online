@@ -2,7 +2,7 @@
 
 **Status:** Confirmed by Luis Ruiz, 2026-08-04. This is the authoritative spec for the Phase 1 build.
 
-**Build status:** Phase 1 complete and verified end-to-end (desktop + mobile). All fields below are implemented. Encryption and DynamoDB remain deliberately stubbed — see `README.md`.
+**Build status:** Phases 1 and 2 complete and verified end-to-end (desktop + mobile). All fields below are implemented, and submissions encrypt and persist for real — see `README.md`.
 
 **Sources reconciled:**
 1. `assets/SLI-Employment-Application.pdf` — the current paper form (5 pages, scanned)
@@ -17,7 +17,7 @@
 | # | Decision | Resolution |
 |---|---|---|
 | A | Contact block | **Structured** into `primaryPhone` / `mailingAddress` / `city` / `state` / `zipCode`, using sister-app field names |
-| B | Email | **Added, optional.** Nothing not on the paper form is required |
+| B | Email | **Added, and required as of 2026-08-05.** Originally optional on the reasoning that nothing off the paper form should be required; overridden by the user, since email is now the primary way HR reaches an applicant |
 | C | Work experience entries | **Max 3** (1 current + 2 previous), matching sister apps |
 | D | "How soon available" | **Free text** — accepts "immediately", "2 weeks" |
 | E | Education | **Structured**, sister-app names as backbone + `Location`/`Dates` companions so the PDF's "dates of enrollment, cities and states" isn't lost |
@@ -33,8 +33,8 @@
 The EEO survey's own *"Signed / Date / Address / Phone"* block existed solely to authenticate the wet signature. With signatures removed it is dropped; the survey's substantive checkboxes remain. Address and phone were already captured in Step 1.
 
 ### Recorded but not acted on
-- The survey intro references reporting on **"sex"** — but no sex/gender field exists anywhere on the PDF. **Not added.**
-- EEO race categories and the term **"Handicapped individual"** are 1970s-era and do not match current EEO-1 categories (no "Two or more races", no "Native Hawaiian/Pacific Islander", Hispanic treated as a race rather than a separate ethnicity question). **Built exactly as printed.** Flagged for HR compliance review as separate work.
+- The survey intro references reporting on **"sex"** — but no sex/gender field exists anywhere on the PDF. **Not added originally; added 2026-08-05** as `eeoSex`, one of the few deliberate departures from the paper form.
+- EEO race categories and the term **"Handicapped individual"** were 1970s-era and did not match current categories. Originally **built exactly as printed** pending review. **Resolved 2026-08-05:** survey rewritten to the SPD 15 (2024) combined race/ethnicity question, sex added, disability question removed. See Step 10 and `EEO-SURVEY-REVIEW.md`.
 
 ---
 
@@ -67,8 +67,8 @@ The EEO survey's own *"Signed / Date / Address / Phone"* block existed solely to
 | `firstName` | text | ✅ | 1–50 chars |
 | `middleName` | text | ⬜ | max 50 |
 | `primaryPhone` | tel | ✅ | US 10-digit, formatted on blur |
-| `secondaryPhone` | tel | ⬜ | US 10-digit |
-| `email` | email | ⬜ | RFC-ish email |
+| `secondaryPhone` | — | — | **No input. Removed from the form 2026-08-05.** Still in the schema, `defaultValues`, and `toFlatRecord()`, always submitting `""`, so the portal record shape is unchanged. Do not delete without a coordinated portal change |
+| `email` | email | ✅ | RFC-ish email. Required as of 2026-08-05 — see decision B |
 | `mailingAddress` | text | ✅ | |
 | `city` | text | ✅ | |
 | `state` | select | ✅ | US states + territories, default CA |
@@ -175,16 +175,22 @@ and need no keyboard on a phone. A half-answer (month picked, year not) is held
 as a deliberately invalid marker so it can be reported as "Choose both a month
 and a year" rather than silently passing.
 
-## Step 8 — References — 🔁 exactly 3
+## Step 8 — References — 🔁 3 slots, 1 required
 
 PDF: *"Please list three references who can provide us with information about your qualifications to perform the job for which you are applying. Business or job-related references are preferable."*
 
-| Field (per entry) | Type | Req |
-|---|---|---|
-| `name` | text | ✅ |
-| `address` | text | ✅ |
-| `telephone` | tel | ✅ |
-| `occupation` | text | ✅ |
+**Changed 2026-08-05:** the paper form asks for three, but only the **first is
+required**. Slots 2 and 3 may be left entirely blank. Once any field in an
+optional slot is filled, the remaining three become required for that slot — a
+name with no phone number is of no use to whoever makes the calls. Enforced by
+`referencesSchema` in `src/lib/schema.ts`, not by the per-field shapes.
+
+| Field (per entry) | Type | Req (ref 1) | Req (refs 2–3) |
+|---|---|---|---|
+| `name` | text | ✅ | ⬜ unless the slot is started |
+| `address` | text | ✅ | ⬜ unless the slot is started |
+| `telephone` | tel | ✅ | ⬜ unless the slot is started; 10-digit if typed |
+| `occupation` | text | ✅ | ⬜ unless the slot is started |
 
 **Not present in the sister-app schema** — new field names required in the admin portal.
 
@@ -200,17 +206,36 @@ The full certification text from PDF page 4 renders verbatim above the checkbox:
 
 No signature field — see Decision I.
 
-## Step 10 — Voluntary Affirmative Action Survey — ⚪ entirely optional
+## Step 10 — Voluntary Demographic Survey — ⚪ entirely optional
 
-PDF page 5. Header: **"ALL ANSWERS ARE VOLUNTARY ONLY."** Rendered visually distinct, positioned after certification, with a prominent Skip control. Displays the PDF's own assurance verbatim: *"Failure to provide this information will not jeopardize or adversely affect your consideration for employment."*
+Originally PDF page 5, transcribed verbatim. **Rewritten 2026-08-05** — the
+printed version used "Handicapped individual", treated Hispanic as a race, and
+omitted Native Hawaiian/Pacific Islander and multiracial identities. Rationale,
+the 2026 regulatory position, and sources are in `EEO-SURVEY-REVIEW.md`.
+
+Still rendered visually distinct, positioned after certification, with a
+prominent Skip control.
 
 | Field | Type | Req | Options |
 |---|---|---|---|
-| `eeoRacialEthnic` | radio | ⬜ | White, Black, Hispanic, American/Alaskan Indian, Asian |
-| `eeoVeteran` | radio Y/N | ⬜ | |
-| `eeoSelfIdentification` | string[] | ⬜ | Handicapped individual, Disabled veteran, Vietnam era veteran |
+| `eeoRacialEthnic` | string[] | ⬜ | Combined race/ethnicity multi-select per **SPD 15 (2024 revision)**: American Indian or Alaska Native · Asian · Black or African American · Hispanic or Latino · **Middle Eastern or North African** · Native Hawaiian or Other Pacific Islander · White |
+| `eeoSex` | radio | ⬜ | Male · Female · I prefer not to answer — **new, resolves the Decision-below gap** |
+| `eeoVeteran` | radio | ⬜ | Plain-language, *not* VEVRAA protected-veteran categories |
 
-**Not present in the sister-app schema** — new field names required in the admin portal.
+**Removed:** `eeoSelfIdentification` (the disability / "handicapped individual"
+question). OFCCP Form CC-305 is mandatory and unmodifiable, and applies only to
+federal contractors — a status SLI has not confirmed. Asking about disability
+pre-offer without that obligation carries risk and no benefit.
+
+> **If SLI is confirmed to be a covered federal contractor**, three things must
+> change: restore a disability question using CC-305 verbatim from the DOL
+> source, replace `eeoVeteran` with the VEVRAA protected-veteran categories,
+> and re-add the `eeoDisability` column to `ApplicantDemographics` in the
+> portal. Nothing else on the form is affected.
+
+**Not present in the sister-app schema.** Stored in the portal's separate
+`ApplicantDemographics` table, which deliberately has no Prisma relation to
+`Application` so these answers cannot reach the detail view or the PDF.
 
 No field on this step may block submission. The step must be completable while entirely empty.
 
@@ -238,10 +263,11 @@ No field on this step may block submission. The step must be completable while e
 ```
 FormValues (nested, Zod-validated)
   └─ toFlatRecord()        ← single adapter; the only place that knows sister-app field names
-      └─ ApplicationRecord (flat, 87 fields)
-          └─ encrypt()     ← STUB: pass-through today, real crypto drops in here
-              └─ POST /api/applications  ← STUB: accepts opaque blob, returns { success, id }
-                  └─ DynamoDB            ← NOT IMPLEMENTED
+      └─ ApplicationRecord (flat)
+          └─ encrypt()     ← nacl.box, ephemeral sender keypair, to the portal's public key
+              └─ POST /api/applications  ← accepts the opaque envelope, returns { success, id }
+                  └─ DynamoDB `storages` ← { id, company, date, package, receivedByCompany }
+                      └─ admin portal sync, via TRL's /api/item endpoint
 ```
 
 The endpoint never inspects or destructures payload fields — it will only ever see ciphertext.

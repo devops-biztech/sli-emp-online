@@ -32,6 +32,11 @@ export function StepPersonal() {
         />
       </div>
 
+      {/*
+        Phone and email share a line. `secondaryPhone` used to sit here; its
+        input was removed, but the field remains in the schema and in the
+        submitted record — see the note in src/lib/schema.ts.
+      */}
       <div className="grid gap-4 sm:grid-cols-2">
         <PhoneField
           name="primaryPhone"
@@ -39,22 +44,16 @@ export function StepPersonal() {
           required
           autoComplete="tel"
         />
-        <PhoneField
-          name="secondaryPhone"
-          label="Other phone"
-          autoComplete="tel-national"
+        <TextField
+          name="email"
+          label="Email"
+          type="email"
+          required
+          inputMode="email"
+          autoComplete="email"
+          placeholder="you@example.com"
         />
       </div>
-
-      <TextField
-        name="email"
-        label="Email"
-        type="email"
-        inputMode="email"
-        autoComplete="email"
-        hint="We'll use this to confirm we received your application."
-        placeholder="you@example.com"
-      />
 
       <TextField
         name="mailingAddress"

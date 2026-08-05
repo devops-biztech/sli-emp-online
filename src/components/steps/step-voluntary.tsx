@@ -1,21 +1,33 @@
 "use client";
 
 import { CheckboxGroupField, RadioField } from "@/components/fields";
-import {
-  EEO_RACIAL_ETHNIC,
-  EEO_SELF_IDENTIFICATION,
-} from "@/lib/schema";
+import { EEO_RACIAL_ETHNIC, EEO_SEX, EEO_VETERAN } from "@/lib/schema";
 
 /**
- * Affirmative Action Survey — page 5 of the source PDF.
+ * Voluntary demographic survey.
  *
- * Legally sensitive and entirely voluntary. Nothing on this step is required,
- * nothing here can block submission, and it deliberately sits after the
- * certification step so it plays no part in the application itself.
+ * Legally sensitive and entirely optional. Nothing here is required, nothing
+ * here can block submission, and it sits after the certification step so it
+ * plays no part in the application itself. Answers are stored separately from
+ * the application in the admin portal and are not visible to anyone making a
+ * hiring decision — see `ApplicantDemographics` in the portal schema.
  *
- * The categories and wording below are transcribed verbatim from the printed
- * form. They are 1970s-era and do not match current EEO-1 categories — see
- * FIELD-INVENTORY.md. Do not "modernize" them without HR compliance sign-off.
+ * REWRITTEN 2026-08-05, replacing the verbatim page-5 transcription of the
+ * printed form. The old version used "handicapped individual", treated
+ * Hispanic as a race, and omitted Native Hawaiian/Pacific Islander and
+ * multiracial identities.
+ *
+ * Two deliberate omissions, both explained in EEO-SURVEY-REVIEW.md:
+ *
+ *   - No disability question. Section 503 requires OFCCP Form CC-305,
+ *     verbatim and unmodifiable, and applies only to federal contractors.
+ *     SLI's contractor status is unconfirmed; asking about disability
+ *     pre-offer without an obligation carries risk and no benefit.
+ *   - The veteran question is plain language, not the VEVRAA protected
+ *     veteran categories, for the same reason.
+ *
+ * If SLI is confirmed to be a covered federal contractor, both of those
+ * decisions must be revisited before this form is used.
  */
 export function StepVoluntary() {
   return (
@@ -25,58 +37,33 @@ export function StepVoluntary() {
           All answers are voluntary.
         </p>
         <p className="mt-1.5 text-sm leading-relaxed text-foreground/80">
-          You are invited to volunteer this information, which will be treated
-          as confidential. Failure to provide it{" "}
-          <strong className="font-semibold">will not</strong> jeopardize or
-          adversely affect your consideration for employment. Government
-          agencies require periodic reports on the ethnicity, handicap and
-          veteran status of employees. This data is for analysis and affirmative
-          action only.
+          You are invited to provide this information, which will be kept
+          confidential. Choosing not to answer{" "}
+          <strong className="font-semibold">will not</strong> affect your
+          consideration for employment in any way. It is kept separate from
+          your application, is not shared with the people deciding who to
+          hire, and is used only to report on the makeup of our applicants as
+          a group.
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
           You may leave this page completely blank and submit.
         </p>
       </div>
 
-      <RadioField
+      <CheckboxGroupField
         name="eeoRacialEthnic"
-        label="Racial or ethnic identity"
-        hint="I belong to the following ethnic and/or racial group. Choose one."
+        label="Race and ethnicity"
+        hint="Select all that apply, or leave blank."
         options={EEO_RACIAL_ETHNIC}
+        columns={1}
       />
+
+      <RadioField name="eeoSex" label="Sex" options={EEO_SEX} />
 
       <RadioField
         name="eeoVeteran"
-        label="Are you a veteran?"
-        options={["Yes", "No"]}
-      />
-
-      <div className="rounded-lg border border-border bg-muted/30 p-4">
-        <h3 className="text-sm font-semibold text-foreground">
-          Special employment notice
-        </h3>
-        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-          Government contractors are subject to 38 U.S.C. 4212 of the Vietnam
-          Era Veterans Readjustment Act of 1974 as amended, which requires that
-          they take affirmative action to employ and advance in employment
-          qualified disabled veterans of the Vietnam Era. And Section 503 of the
-          Rehabilitation Act of 1973, as amended, which requires government
-          contractors to take affirmative action to employ and advance in
-          employment qualified handicapped individuals.
-        </p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          If you are a disabled veteran or have a physical or mental handicap,
-          you are invited to volunteer this information, which will be treated
-          as confidential. Failure to provide this information will not
-          jeopardize or adversely affect your consideration for employment.
-        </p>
-      </div>
-
-      <CheckboxGroupField
-        name="eeoSelfIdentification"
-        label="If you wish to be identified, choose any that apply"
-        options={EEO_SELF_IDENTIFICATION}
-        columns={1}
+        label="Veteran status"
+        options={EEO_VETERAN}
       />
     </div>
   );

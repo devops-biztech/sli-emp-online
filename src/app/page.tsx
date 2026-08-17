@@ -1,7 +1,11 @@
 import { ApplicationWizard } from "@/components/wizard/application-wizard";
 import { parsePublicKey } from "@/lib/encryption";
 
-export default function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ position?: string | string[] }>;
+}) {
   /*
    * Only the PUBLIC half ever reaches the browser — the portal's secret key
    * is not needed here and must never be added to this app's environment.
@@ -14,5 +18,20 @@ export default function Page() {
   const portalPublicKey = process.env.SLI_PUB ?? "";
   parsePublicKey(portalPublicKey);
 
-  return <ApplicationWizard portalPublicKey={portalPublicKey} />;
+  /*
+   * `?position=Lumber%20grader` prefills step 2's position field, so job
+   * postings can link straight to an application for that opening. It's a
+   * convenience, not an allowlist — the field stays fully editable.
+   */
+  const { position } = await searchParams;
+  const initialPosition = (Array.isArray(position) ? position[0] : (position ?? ""))
+    .trim()
+    .slice(0, 100);
+
+  return (
+    <ApplicationWizard
+      portalPublicKey={portalPublicKey}
+      initialPosition={initialPosition}
+    />
+  );
 }

@@ -55,9 +55,14 @@ function focusFirstInvalid(root: HTMLElement | null) {
 interface ApplicationWizardProps {
   /** The admin portal's public key, space-separated bytes. Public by design. */
   portalPublicKey: string;
+  /** Prefill for the position field, from the `?position=` link parameter. */
+  initialPosition?: string;
 }
 
-export function ApplicationWizard({ portalPublicKey }: ApplicationWizardProps) {
+export function ApplicationWizard({
+  portalPublicKey,
+  initialPosition,
+}: ApplicationWizardProps) {
   const [current, setCurrent] = React.useState(0);
   const [furthest, setFurthest] = React.useState(0);
   const [submitState, setSubmitState] = React.useState<SubmitState>({
@@ -70,7 +75,9 @@ export function ApplicationWizard({ portalPublicKey }: ApplicationWizardProps) {
 
   const form = useForm<ApplicationValues>({
     resolver: zodResolver(applicationSchema),
-    defaultValues,
+    defaultValues: initialPosition
+      ? { ...defaultValues, applicationPosition: initialPosition }
+      : defaultValues,
     mode: "onTouched",
     shouldFocusError: false,
   });
@@ -202,10 +209,11 @@ export function ApplicationWizard({ portalPublicKey }: ApplicationWizardProps) {
                 width={188}
                 height={76}
                 priority
-                className="h-9 w-auto sm:h-11"
+                className="h-9 w-auto shrink-0 sm:h-11"
               />
-              <span className="ml-auto text-xs font-medium uppercase tracking-widest text-white/60">
+              <span className="ml-auto min-w-0 text-right text-xs font-medium uppercase tracking-widest text-white/60">
                 Employment Application
+                {initialPosition && ` - ${initialPosition}`}
               </span>
             </div>
             <Stepper current={current} furthest={furthest} onJump={goTo} />

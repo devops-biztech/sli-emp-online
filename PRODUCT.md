@@ -35,16 +35,17 @@ Not a job board or an ATS. A single company's application form, replacing one sp
 
 ## Capabilities and Constraints
 
-- **10 steps**, one logical section each. Per-step validation; the user cannot advance past invalid required fields.
+- **9 steps**, one logical section each. Per-step validation; the user cannot advance past invalid required fields. (Was 10 until 2026-08-31, when the voluntary survey was removed from the flow.)
 - Repeatable sections: colleges (≤3), trade schools (≤3), licenses (≤3), work experience (≥1, ≤3), references (3 slots, 1 required — changed 2026-08-05).
 - Conditional fields driven by prior answers.
 - Final review step: read-only summary, per-section edit links, certification checkbox.
-- Voluntary EEO survey is **legally segregated**, entirely optional, and may never block submission.
+- The position field is a **dropdown of currently open roles**, defaulting to *Entry Level Full-time Floater*. Free text let applicants apply for jobs that were not open; the list is `src/lib/positions.ts` and must match the careers site's `OPENINGS`.
+- Voluntary EEO survey **removed from the flow 2026-08-31** at SLI's request: not a federal contractor, so demographics are collected post-hire instead. The code remains in the repo, unwired — see `README.md`. When it ran, it was legally segregated, entirely optional, and could never block submission; those constraints still bind if it is ever restored.
 - WCAG AA. Real `<label>`s, full keyboard navigation, ARIA on the stepper and error messages, visible focus.
 - Submission: assemble typed schema → `toFlatRecord()` → `encrypt()` → endpoint → DynamoDB. Encryption is real (tweetnacl `box`, ephemeral sender keypair per submission, encrypted to the admin portal's public key) and persistence writes the opaque envelope to the shared `storages` table. The endpoint must never inspect or destructure payload fields — it *cannot*, since the payload is encrypted to the portal's key rather than this server's.
 - The complete confirmed field inventory and data model lives in `FIELD-INVENTORY.md`. It is authoritative; this file does not duplicate it.
 
-**Delivery status (2026-08-05):** Phases 1 and 2 shipped. All 10 steps built and verified end-to-end at desktop and mobile widths. Encryption and DynamoDB persistence are implemented and verified against the real `storages` table, decrypting through the admin portal's own module.
+**Delivery status (2026-08-05):** Phases 1 and 2 shipped. All 10 steps built and verified end-to-end at desktop and mobile widths. (Nine steps as of 2026-08-31.) Encryption and DynamoDB persistence are implemented and verified against the real `storages` table, decrypting through the admin portal's own module.
 
 Keys were regenerated 2026-08-05 and the pair is verified: this app holds only `SLI_PUB`, the portal holds both halves. One blocker remains before applicants can be pointed at this form — the `mill-jobs-portal-v2` decrypt change must be committed and deployed. Tracked in `README.md`.
 
@@ -62,14 +63,15 @@ Keys were regenerated 2026-08-05 and the pair is verified: this app holds only `
 - `assets/SLI-Employment-Application.pdf` — the real 5-page paper form, fully transcribed into `FIELD-INVENTORY.md`.
 - The sister-app DynamoDB record shape (81 applicant fields + 6 system fields), supplied by the user.
 - Real company facts: Eureka CA, P.O. Box 152, 95502, phone 707-443-7025, fax 707-443-2356, "An Equal Opportunity Employer," est. 1971, ~110 employees, mills Douglas Fir, Hemlock, Redwood, Pine, Spruce.
-- **Absent, must not be fabricated:** open positions or job listings, salary or benefit figures, hiring timelines, application status or response-time promises, employee testimonials.
+- **Open positions, as of 2026-08-31:** one — *Entry Level Full-time Floater*, taken verbatim from the careers site's `OPENINGS`. This is the only job listing with a source; do not invent others.
+- **Absent, must not be fabricated:** salary or benefit figures, hiring timelines, application status or response-time promises, employee testimonials.
 
 ## Product Principles
 
 1. **Fidelity over invention.** Every field traces to the paper PDF or the sister-app schema. Nothing is added without explicit sign-off, and every addition is recorded in `FIELD-INVENTORY.md`.
 2. **The form's job is to prevent omission.** Validation is the product, not a nicety. Blocking advancement is a feature.
 3. **Cheap for the applicant.** Minimal typing, short steps, obvious progress, no dead ends. An entry-level applicant on a phone is the design target.
-4. **The voluntary survey is visibly voluntary.** It sits after certification, is skippable in one action, and never gates submission — legally and visually separated.
+4. **Ask only what SLI will act on.** The voluntary survey came out because SLI has no reporting obligation that applicant demographics feed; the position field became a dropdown because a free-text answer invited applications nobody could accept. If the survey is ever restored, its original constraints hold: after certification, skippable in one action, never gating submission.
 5. **The payload is opaque by design.** The client owns assembly and encryption; the transport layer knows nothing about the contents.
 
 ## Accessibility & Inclusion

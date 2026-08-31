@@ -16,6 +16,7 @@ import {
   type ApplicationValues,
 } from "@/lib/schema";
 import { toFlatRecord } from "@/lib/flatten";
+import type { OpenPosition } from "@/lib/positions";
 import { encrypt, parsePublicKey, toSubmission } from "@/lib/encryption";
 
 import { StepPersonal } from "@/components/steps/step-personal";
@@ -55,8 +56,13 @@ function focusFirstInvalid(root: HTMLElement | null) {
 interface ApplicationWizardProps {
   /** The admin portal's public key, space-separated bytes. Public by design. */
   portalPublicKey: string;
-  /** Prefill for the position field, from the `?position=` link parameter. */
-  initialPosition?: string;
+  /**
+   * Preselection for the position dropdown, from the `?position=` link
+   * parameter. Already resolved against `OPEN_POSITIONS` in `page.tsx`, so
+   * it is either an open role or absent — an unrecognized link value arrives
+   * here as `undefined` and the form falls back to the entry-level default.
+   */
+  initialPosition?: OpenPosition;
 }
 
 export function ApplicationWizard({
@@ -282,6 +288,7 @@ export function ApplicationWizard({
               {step.id === "employment" && <StepEmployment />}
               {step.id === "references" && <StepReferences />}
               {step.id === "review" && <StepReview onEdit={goTo} />}
+              {/* Dormant: "voluntary" is no longer in STEPS. */}
               {step.id === "voluntary" && <StepVoluntary />}
             </div>
 
@@ -308,7 +315,13 @@ export function ApplicationWizard({
                 </span>
 
                 <div className="ml-auto flex items-center gap-2">
-                  {isLast && (
+                  {/*
+                    Gated on `optional`, not on `isLast`: the only optional
+                    step was the voluntary survey, which is retired, so this
+                    renders for nobody today and comes back correctly if the
+                    step is ever restored. See `VOLUNTARY_STEP` in steps.ts.
+                  */}
+                  {step.optional && (
                     <Button
                       type="button"
                       variant="ghost"

@@ -3,19 +3,29 @@
 import {
   CheckboxGroupField,
   ConsentField,
+  SelectField,
   TextField,
   YesNoField,
 } from "@/components/fields";
+import { POSITION_OPTIONS } from "@/lib/positions";
 import { EMPLOYMENT_TYPES, SHIFTS } from "@/lib/schema";
 
 export function StepPosition() {
   return (
     <div className="grid gap-5">
-      <TextField
+      {/*
+        A dropdown, not a text box: applicants were applying for roles that
+        weren't open, which costs them a long form and costs SLI a letter
+        back. The list is `OPEN_POSITIONS` — see `src/lib/positions.ts` for
+        how to open or close a role.
+      */}
+      <SelectField
         name="applicationPosition"
         label="Position you're applying for"
         required
-        placeholder="e.g. Lumber grader, Forklift operator"
+        hidePlaceholder
+        hint="These are the roles we're hiring for right now."
+        options={POSITION_OPTIONS}
       />
 
       <TextField

@@ -75,11 +75,15 @@ export interface ApplicationRecord {
   /* Certification */
   agreeToTerms: boolean;
 
-  /* Voluntary survey (no sister-app equivalent) */
-  /** Comma-joined multi-select. */
-  eeoRacialEthnic: string;
-  eeoSex: string;
-  eeoVeteran: string;
+  /*
+   * No `eeoRacialEthnic` / `eeoSex` / `eeoVeteran` — the voluntary survey was
+   * retired for SLI on 2026-08-31 and these keys are deliberately absent, not
+   * blank. The portal's `mapDemographics()` tests for the *presence* of these
+   * keys to decide whether the applicant was asked at all: sending them empty
+   * would write an `ApplicantDemographics` row recording a declined survey
+   * that was never shown, and would dilute TRL's response-rate reporting.
+   * Omitting them writes no row. See `sync-applications.ts` in the portal.
+   */
 
   /* Indexed groups are declared via the index signature below. */
   [key: string]: string | boolean | null;
@@ -282,9 +286,10 @@ export function toFlatRecord(values: ApplicationValues): ApplicationRecord {
     /* Certification */
     agreeToTerms: values.agreeToTerms === true,
 
-    /* Voluntary survey */
-    eeoRacialEthnic: values.eeoRacialEthnic.join(", "),
-    eeoSex: values.eeoSex,
-    eeoVeteran: values.eeoVeteran,
+    /*
+     * The `eeo*` keys are intentionally not emitted — see the note on
+     * `ApplicationRecord` above. Restoring the survey means restoring them
+     * here too, or the answers are collected and then thrown away.
+     */
   };
 }

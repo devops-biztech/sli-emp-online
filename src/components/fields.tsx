@@ -13,6 +13,7 @@
  */
 import * as React from "react";
 import { Controller, useFormContext, type FieldPath } from "react-hook-form";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -313,6 +314,49 @@ export function TextAreaField({
 /* Select                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Shared <select> visual.
+ *
+ * `appearance-none` is doing real work here: Chrome paints the platform
+ * dropdown arrow against the inline edge of the *border* box and ignores
+ * padding, so the caret ends up jammed against the field's right border with
+ * no optical relationship to the 12px the text sits at on the left. The
+ * native arrow is suppressed and redrawn by `SelectChrome` at a matching
+ * inset. `pr-9` keeps long option text from running under it.
+ */
+const selectClassName = cn(
+  "h-11 w-full min-w-0 appearance-none rounded-md border border-input bg-card pl-3 pr-9 text-base",
+  "focus-visible:border-brand-green focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-green/35",
+);
+
+/**
+ * Positions the replacement caret over a native <select>. `pointer-events-none`
+ * so clicking the caret still opens the select — on a phone the whole control
+ * is the tap target.
+ */
+function SelectChrome({
+  className,
+  caretClassName,
+  children,
+}: {
+  className?: string;
+  caretClassName?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("relative min-w-0", className)}>
+      {children}
+      <ChevronDown
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground",
+          caretClassName,
+        )}
+      />
+    </div>
+  );
+}
+
 interface SelectFieldProps {
   name: Path;
   label: string;
@@ -320,6 +364,12 @@ interface SelectFieldProps {
   required?: boolean;
   className?: string;
   placeholder?: string;
+  /**
+   * Omits the empty "choose one" option. For a field that always carries a
+   * valid value there is no unchosen state to represent, and offering one
+   * only gives the applicant a way to make the field invalid.
+   */
+  hidePlaceholder?: boolean;
   options: readonly { value: string; label: string }[];
 }
 
@@ -335,6 +385,7 @@ export function SelectField({
   required,
   className,
   placeholder = "Choose one",
+  hidePlaceholder,
   options,
 }: SelectFieldProps) {
   const { register } = useFormContext<ApplicationValues>();
@@ -348,24 +399,25 @@ export function SelectField({
       className={className}
     >
       {({ id, describedBy, invalid }) => (
-        <select
-          id={id}
-          aria-invalid={invalid || undefined}
-          aria-describedby={describedBy}
-          className={cn(
-            "h-11 w-full rounded-md border border-input bg-card px-3 text-base",
-            "focus-visible:border-brand-green focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-green/35",
-            invalid && "border-destructive ring-2 ring-destructive/25",
-          )}
-          {...register(name)}
-        >
-          <option value="">{placeholder}</option>
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <SelectChrome>
+          <select
+            id={id}
+            aria-invalid={invalid || undefined}
+            aria-describedby={describedBy}
+            className={cn(
+              selectClassName,
+              invalid && "border-destructive ring-2 ring-destructive/25",
+            )}
+            {...register(name)}
+          >
+            {!hidePlaceholder && <option value="">{placeholder}</option>}
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </SelectChrome>
       )}
     </FieldShell>
   );
@@ -466,47 +518,52 @@ export function MonthYearField({
               revalidate();
             };
 
+            // Tighter than a lone select: two of these share one row.
             const selectClass = cn(
-              "h-11 w-full min-w-0 rounded-md border border-input bg-card px-2 text-base",
-              "focus-visible:border-brand-green focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-green/35",
+              selectClassName,
+              "pl-2 pr-8",
               invalid && "border-destructive ring-2 ring-destructive/25",
             );
 
             return (
               <div className="flex gap-2" aria-describedby={describedBy}>
-                <select
-                  id={`${baseId}-month`}
-                  aria-label={`${label} — month`}
-                  aria-invalid={invalid || undefined}
-                  className={selectClass}
-                  value={month}
-                  onBlur={field.onBlur}
-                  onChange={(e) => write(e.target.value, year)}
-                >
-                  <option value="">Month</option>
-                  {MONTHS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
+                <SelectChrome className="flex-1" caretClassName="right-2">
+                  <select
+                    id={`${baseId}-month`}
+                    aria-label={`${label} — month`}
+                    aria-invalid={invalid || undefined}
+                    className={selectClass}
+                    value={month}
+                    onBlur={field.onBlur}
+                    onChange={(e) => write(e.target.value, year)}
+                  >
+                    <option value="">Month</option>
+                    {MONTHS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </SelectChrome>
 
-                <select
-                  id={`${baseId}-year`}
-                  aria-label={`${label} — year`}
-                  aria-invalid={invalid || undefined}
-                  className={cn(selectClass, "max-w-28")}
-                  value={year}
-                  onBlur={field.onBlur}
-                  onChange={(e) => write(month, e.target.value)}
-                >
-                  <option value="">Year</option>
-                  {years.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
+                <SelectChrome className="max-w-28" caretClassName="right-2">
+                  <select
+                    id={`${baseId}-year`}
+                    aria-label={`${label} — year`}
+                    aria-invalid={invalid || undefined}
+                    className={selectClass}
+                    value={year}
+                    onBlur={field.onBlur}
+                    onChange={(e) => write(month, e.target.value)}
+                  >
+                    <option value="">Year</option>
+                    {years.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </SelectChrome>
               </div>
             );
           }}

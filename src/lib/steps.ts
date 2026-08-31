@@ -10,6 +10,10 @@
 import type { FieldPath } from "react-hook-form";
 import type { ApplicationValues } from "./schema";
 
+/**
+ * Every step this app knows how to render. `STEPS` is the subset currently in
+ * the flow — "voluntary" is declared here but retired, see `VOLUNTARY_STEP`.
+ */
 export type StepId =
   | "personal"
   | "position"
@@ -124,15 +128,30 @@ export const STEPS: StepDefinition[] = [
     description: "Check everything, then certify and submit.",
     fields: ["agreeToTerms"],
   },
-  {
-    id: "voluntary",
-    label: "Voluntary Survey",
-    shortLabel: "Survey",
-    description: "Optional. Not part of the hiring decision.",
-    fields: [],
-    optional: true,
-  },
 ];
+
+/**
+ * The voluntary EEO survey step — RETIRED FROM THE FLOW 2026-08-31.
+ *
+ * SLI is not a federal contractor and, unlike TRL, has no reporting
+ * obligation that applicant demographics feed; it collects that data from
+ * people it has hired instead. So the step was taken out of `STEPS` rather
+ * than deleted, along with the three `eeo*` keys in `toFlatRecord()` — the
+ * portal treats the *presence* of those keys as "this applicant was asked",
+ * so emitting them blank would log a declined survey that was never shown.
+ *
+ * Kept here, unreferenced, so restoring it is an edit and not an
+ * archaeology exercise. The full checklist is in
+ * `src/components/steps/step-voluntary.tsx`.
+ */
+export const VOLUNTARY_STEP: StepDefinition = {
+  id: "voluntary",
+  label: "Voluntary Survey",
+  shortLabel: "Survey",
+  description: "Optional. Not part of the hiring decision.",
+  fields: [],
+  optional: true,
+};
 
 export const TOTAL_STEPS = STEPS.length;
 

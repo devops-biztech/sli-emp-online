@@ -4,7 +4,25 @@ import { CheckboxGroupField, RadioField } from "@/components/fields";
 import { EEO_RACIAL_ETHNIC, EEO_SEX, EEO_VETERAN } from "@/lib/schema";
 
 /**
- * Voluntary demographic survey.
+ * Voluntary demographic survey — RETIRED FROM THE FLOW 2026-08-31.
+ *
+ * SLI asked for it to come out of the application. It is a small site, not a
+ * federal contractor, and has no reporting obligation that applicant-side
+ * demographics feed; it collects that data from people it has actually hired.
+ * TRL, which is contractor-bound, still runs its own copy of this step.
+ *
+ * Nothing here is deleted, only unwired. To put the step back:
+ *
+ *   1. `steps.ts` — add `VOLUNTARY_STEP` to the end of the `STEPS` array.
+ *   2. `flatten.ts` — re-emit `eeoRacialEthnic` / `eeoSex` / `eeoVeteran`
+ *      and re-declare them on `ApplicationRecord`. Without this the answers
+ *      are collected and discarded, and the portal records no survey.
+ *
+ * That is the whole restore. The wizard already renders this component and
+ * already shows the "Skip & submit" control for any step marked `optional`,
+ * and the `eeo*` fields never left `schema.ts` or `defaultValues`.
+ *
+ * ---
  *
  * Legally sensitive and entirely optional. Nothing here is required, nothing
  * here can block submission, and it sits after the certification step so it

@@ -11,6 +11,8 @@
  */
 import { z } from "zod";
 
+import { ENTRY_LEVEL_POSITION, OPEN_POSITIONS } from "./positions";
+
 /* ------------------------------------------------------------------ */
 /* Shared primitives                                                   */
 /* ------------------------------------------------------------------ */
@@ -275,7 +277,17 @@ export const applicationSchema = z
     zipCode: zipShape,
 
     /* Step 2 — Position & Availability */
-    applicationPosition: required("Position"),
+    /*
+     * A closed set, not free text: applicants were applying for roles that
+     * were not open. The options live in `positions.ts`; the field is always
+     * populated (see `defaultValues`), so the only way to fail this is a
+     * tampered payload or a role closed between page load and submit.
+     */
+    applicationPosition: z.enum(OPEN_POSITIONS, {
+      errorMap: () => ({
+        message: "Choose one of the positions we're currently hiring for.",
+      }),
+    }),
     howSoonAvailable: required("Availability"),
     employmentTypeSought: z
       .array(z.enum(EMPLOYMENT_TYPES))
@@ -328,10 +340,13 @@ export const applicationSchema = z
       }),
     }),
 
-    /* Step 10 — Voluntary survey. Every field optional, always. */
     /*
-     * All optional, always. Nothing on this step may block submission —
-     * see the `optional: true` step definition and `skipSurveyAndSubmit`.
+     * Voluntary EEO survey — RETIRED FROM THE FLOW 2026-08-31. No step renders
+     * these any more and `toFlatRecord()` no longer emits them: SLI is not a
+     * federal contractor and collects demographics only from people it has
+     * hired. They stay declared, and stay optional, so the step can be put
+     * back without a schema change — the restore checklist is in
+     * `src/components/steps/step-voluntary.tsx`.
      */
     eeoRacialEthnic: z.array(z.enum(EEO_RACIAL_ETHNIC)),
     eeoSex: z.string().trim(),
@@ -425,7 +440,7 @@ export const defaultValues = {
   state: "CA",
   zipCode: "",
 
-  applicationPosition: "",
+  applicationPosition: ENTRY_LEVEL_POSITION,
   howSoonAvailable: "",
   employmentTypeSought: [],
   shiftsAvailable: [],

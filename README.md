@@ -1,6 +1,6 @@
 # Schmidbauer Lumber — Online Employment Application
 
-A ten-step application wizard replacing the printed
+A nine-step application wizard replacing the printed
 `assets/SLI-Employment-Application.pdf`. Built to make it hard to reach the end
 with fields missed: each step validates before it will let you advance.
 
@@ -12,6 +12,15 @@ implemented, full flow verified end-to-end in a real browser at 1280px and
 
 **Phase 2 complete.** Client-side encryption and DynamoDB persistence are both
 implemented and verified against the real table (see *Submission pipeline*).
+
+**Changed 2026-08-31, at SLI's request.** Two things, both below:
+
+- **Position is a dropdown, not a text box.** Applicants were applying for
+  roles that were not open. The list lives in `src/lib/positions.ts` and
+  defaults to *Entry Level Full-time Floater*.
+- **The voluntary EEO survey is out of the flow** — ten steps became nine.
+  SLI is not a federal contractor and collects demographics only from people
+  it has hired. The step was unwired, not deleted; see *The voluntary survey*.
 
 **Before applicants are pointed at this form:** the `mill-jobs-portal-v2`
 decrypt change must be committed and deployed, or submissions will be stored
@@ -38,6 +47,7 @@ npm run dev
 ```
 src/lib/schema.ts       Zod schema + types — the single source of truth
 src/lib/steps.ts        Step definitions, incl. which fields each step validates
+src/lib/positions.ts    The open roles the step-2 dropdown offers
 src/lib/flatten.ts      toFlatRecord(): nested form state → flat portal record
 src/lib/encryption.ts   encrypt(): client-side nacl.box to the portal's key
 src/components/fields.tsx        Field primitives (carry the a11y contract)
@@ -128,6 +138,44 @@ key, not this server's.
 `toFlatRecord()` is the single module that knows the admin portal's field
 names. If the portal schema moves, it moves there and nowhere else.
 
+## Open positions
+
+The step-2 dropdown is `OPEN_POSITIONS` in `src/lib/positions.ts`. To open a
+role, add its title; to close one, delete the line. Redeploy either way.
+
+Titles must match `OPENINGS` in
+`schmidbauer-lumber-site-v2/src/data/stations.ts` **exactly** — the careers
+page links here as `?position=<title>` and `resolvePosition()` matches against
+the open roles case- and whitespace-insensitively but otherwise literally. A
+link naming a role that isn't open (a closed job, an old posting, a
+hand-edited URL) resolves to nothing and the applicant lands on the
+entry-level default. The query string cannot introduce a role that isn't in
+the list, which is the point: that was the old free-text field's failure mode.
+
+Applications already submitted keep the title they were sent with. Nothing
+downstream re-validates against this list.
+
+## The voluntary survey
+
+Removed from the flow 2026-08-31 at SLI's request. SLI is a small site, is not
+a federal contractor, and collects demographic data only from people it has
+hired; TRL, which is contractor-bound, still runs its own copy of the step.
+
+It was unwired, not deleted. `step-voluntary.tsx`, the `eeo*` fields in
+`schema.ts` and `defaultValues`, the option sets, and the step definition
+(`VOLUNTARY_STEP` in `steps.ts`) all remain. Restoring it is two edits, listed
+at the top of `src/components/steps/step-voluntary.tsx`.
+
+One detail that is easy to get wrong: `toFlatRecord()` now **omits** the three
+`eeo*` keys rather than sending them blank. The portal's `mapDemographics()`
+treats the presence of those keys as "this applicant was asked and may have
+declined", so blank values would write an `ApplicantDemographics` row for
+every SLI application and dilute the response-rate reporting TRL depends on.
+Absent keys write no row at all.
+
+`EEO-SURVEY-REVIEW.md` still holds the regulatory analysis, and stays relevant
+if SLI's contractor status ever changes.
+
 ## Known gaps for follow-up
 
 - **A wrong `SLI_PUB` fails silently and unrecoverably.** An earlier keypair
@@ -150,30 +198,17 @@ names. If the portal schema moves, it moves there and nowhere else.
   other mill too. Worth hardening — the receiver's public key isn't even used
   for decryption, only its secret is.
 - **`toFlatRecord()` emits fields the portal's `mapDecryptedFields` drops.**
-  References and EEO answers have no column in the portal's `Application`
-  model, so they decrypt successfully and are then discarded on write.
-- **The voluntary survey needs an HR decision before it changes.** Findings,
-  the 2026 regulatory picture, and a proposed replacement are written up in
-  `EEO-SURVEY-REVIEW.md`. Headline: the EEO-1 report uses *employee* records,
-  not applicant data, and the applicant-flow requirement went away with
-  EO 11246 in January 2025 — so whether SLI needs to ask any of this depends
-  entirely on whether it is a federal contractor.
-- **Survey answers are now stored** in the portal's `ApplicantDemographics`
-  table, deliberately with no Prisma relation to `Application` so they cannot
-  be pulled into the detail view or the PDF. Nothing displays them yet.
-- **The voluntary survey assumes SLI is not a federal contractor.** Resolved
-  2026-08-05: the survey was rewritten to the SPD 15 (2024) combined
-  race/ethnicity question, sex was added, and the disability question was
-  removed. That last decision rests on contractor status being *unconfirmed* —
-  if SLI is covered, the disability question must be restored using OFCCP Form
-  CC-305 verbatim and the veteran question must use the VEVRAA categories.
-  `EEO-SURVEY-REVIEW.md` lists exactly what to change back.
+  References have no column in the portal's `Application` model, so they
+  decrypt successfully and are then discarded on write.
+- **The open-roles list is duplicated.** `src/lib/positions.ts` here and
+  `OPENINGS` in `schmidbauer-lumber-site-v2/src/data/stations.ts` must agree,
+  by exact title, or a careers-page apply link lands on the default role
+  instead of the one it advertised. Two repos, two deploys, no enforcement.
 - **The certification text says "My signature below certifies…"** but the form
   collects no signature (signatures happen in person at interview). The
   checkbox is presented as the electronic equivalent. Worth a legal read.
-- **References and the EEO survey have no sister-app fields.** `toFlatRecord()`
-  emits new names (`referenceOneName`, `eeoRacialEthnic`, …) that the admin
-  portal will need to learn.
+- **References have no sister-app fields.** `toFlatRecord()` emits new names
+  (`referenceOneName`, …) that the admin portal will need to learn.
 - **No draft save / resume.** Explicitly out of scope; a long form with no
   resume will lose some applicants who get interrupted.
 

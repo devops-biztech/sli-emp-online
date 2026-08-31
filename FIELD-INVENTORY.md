@@ -78,7 +78,7 @@ The EEO survey's own *"Signed / Date / Address / Phone"* block existed solely to
 
 | Field | Type | Req | Notes |
 |---|---|---|---|
-| `applicationPosition` | text | ✅ | PDF: "Job applied for" |
+| `applicationPosition` | select | ✅ | PDF: "Job applied for". **Changed 2026-08-31 from free text to a dropdown of open roles** (`OPEN_POSITIONS` in `src/lib/positions.ts`), defaulting to *Entry Level Full-time Floater*. Free text produced applications for roles that were not open. `?position=` is now matched against this list, not trusted. |
 | `howSoonAvailable` | text | ✅ | PDF: "How soon are you available for employment?" |
 | `employmentTypeSought` | string[] | ✅ | min 1 — Full-time, Part-time, Temporary, Summer. Checkboxes on paper, so multi-select |
 | `shiftsAvailable` | string[] | ✅ | min 1 — Day, Swing, Night, Rotating |
@@ -206,7 +206,18 @@ The full certification text from PDF page 4 renders verbatim above the checkbox:
 
 No signature field — see Decision I.
 
-## Step 10 — Voluntary Demographic Survey — ⚪ entirely optional
+## Step 10 — Voluntary Demographic Survey — ❌ REMOVED FROM THE FLOW 2026-08-31
+
+**No longer part of the application.** SLI is a small site, is not a federal
+contractor, and asked for the survey to be dropped; it collects demographics
+only from applicants it has hired. The code is retained but unwired, and
+`toFlatRecord()` omits the three `eeo*` keys entirely rather than sending them
+blank — the portal treats key *presence* as "this applicant was asked". The
+restore checklist is at the top of `src/components/steps/step-voluntary.tsx`.
+
+Everything below describes the step as built, and governs it if it is ever
+restored. TRL's copy is unaffected and still runs.
+
 
 Originally PDF page 5, transcribed verbatim. **Rewritten 2026-08-05** — the
 printed version used "Handicapped individual", treated Hispanic as a race, and
@@ -253,8 +264,8 @@ No field on this step may block submission. The step must be completable while e
 | 6 | Skills & Experience | 3 compact textareas |
 | 7 | Work Experience 🔁 | one card at a time |
 | 8 | References | compact, ×3 |
-| 9 | Review & Certify | summary + edit links |
-| 10 | Voluntary Survey ⚪ | skippable |
+| 9 | Review & Certify | summary + edit links, **final step** |
+| ~~10~~ | ~~Voluntary Survey~~ | removed from the flow 2026-08-31 |
 
 ---
 

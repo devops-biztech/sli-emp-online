@@ -1,5 +1,13 @@
 # Voluntary Survey — Compliance Review
 
+> **STATUS 2026-08-31 — the survey is no longer in the SLI application.**
+> SLI confirmed it is not a federal contractor and will collect demographic
+> data only from applicants it hires, so the step was removed from the flow.
+> The code is retained and unwired (see `README.md` → *The voluntary survey*),
+> and everything in this review still governs the step if it is ever restored
+> or if SLI's contractor status changes. TRL's copy of the survey is
+> unaffected.
+
 **Status: IMPLEMENTED 2026-08-05.** Prepared for HR review; the recommended
 changes were then approved and built. Not legal advice — the reasoning below
 should still be confirmed with counsel or an HR compliance advisor.

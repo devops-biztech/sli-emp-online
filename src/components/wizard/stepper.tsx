@@ -39,17 +39,17 @@ export function Stepper({ current, furthest, onJump }: StepperProps) {
                 }`}
                 className={cn(
                   "group flex w-full flex-col gap-1.5 rounded-sm pb-0.5 text-left",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue-light focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-deep",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-deep",
                   isReachable ? "cursor-pointer" : "cursor-default",
                 )}
               >
                 <span
                   className={cn(
                     "h-1.5 w-full rounded-full transition-colors duration-300",
-                    isComplete && "bg-brand-blue-light",
-                    isCurrent && "bg-brand-blue-light",
+                    isComplete && "bg-brand-gold",
+                    isCurrent && "bg-brand-gold",
                     !isComplete && !isCurrent && "bg-white/25",
-                    isReachable && !isCurrent && "group-hover:bg-brand-blue-light/80",
+                    isReachable && !isCurrent && "group-hover:bg-brand-gold/80",
                   )}
                 />
                 <span

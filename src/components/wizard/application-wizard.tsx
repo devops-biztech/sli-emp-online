@@ -2,16 +2,9 @@
 
 import * as React from "react";
 import Image from "next/image";
-import { FormProvider, useForm } from "react-hook-form";
+import { FormProvider, useForm, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Loader2,
-  RotateCcw,
-  Send,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Loader2, Send } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,7 +15,9 @@ import {
   defaultValues,
   type ApplicationValues,
 } from "@/lib/schema";
+import { toFlatRecord } from "@/lib/flatten";
 import type { OpenPosition } from "@/lib/positions";
+import { encrypt, parsePublicKey, toSubmission } from "@/lib/encryption";
 
 import { StepPersonal } from "@/components/steps/step-personal";
 import { StepPosition } from "@/components/steps/step-position";
@@ -38,20 +33,29 @@ import { StepVoluntary } from "@/components/steps/step-voluntary";
 type SubmitState =
   | { status: "idle" }
   | { status: "submitting" }
+  | { status: "error"; message: string }
   | { status: "success"; id: string };
 
-/**
- * How long the fake submission spins. Long enough to read as a real network
- * round trip, short enough not to drag during a walkthrough.
- */
-const DEMO_SUBMIT_DELAY_MS = 1400;
+/** Finds the first invalid control in the step and puts the cursor in it. */
+function focusFirstInvalid(root: HTMLElement | null) {
+  if (!root) return;
+  const marked = root.querySelector<HTMLElement>('[aria-invalid="true"]');
+  if (!marked) return;
 
-/** Shaped like the production confirmation number (a UUID), made up locally. */
-function demoConfirmationId() {
-  return crypto.randomUUID();
+  const focusable = marked.matches("input, select, textarea, button")
+    ? marked
+    : marked.querySelector<HTMLElement>(
+        'input, select, textarea, button, [tabindex]:not([tabindex="-1"])',
+      );
+
+  const target = focusable ?? marked;
+  target.scrollIntoView({ block: "center", behavior: "smooth" });
+  target.focus({ preventScroll: true });
 }
 
 interface ApplicationWizardProps {
+  /** The admin portal's public key, space-separated bytes. Public by design. */
+  portalPublicKey: string;
   /**
    * Preselection for the position dropdown, from the `?position=` link
    * parameter. Already resolved against `OPEN_POSITIONS` in `page.tsx`, so
@@ -61,12 +65,18 @@ interface ApplicationWizardProps {
   initialPosition?: OpenPosition;
 }
 
-export function ApplicationWizard({ initialPosition }: ApplicationWizardProps) {
+export function ApplicationWizard({
+  portalPublicKey,
+  initialPosition,
+}: ApplicationWizardProps) {
   const [current, setCurrent] = React.useState(0);
   const [furthest, setFurthest] = React.useState(0);
   const [submitState, setSubmitState] = React.useState<SubmitState>({
     status: "idle",
   });
+  const [blockedCount, setBlockedCount] = React.useState(0);
+
+  const panelRef = React.useRef<HTMLDivElement>(null);
   const headingRef = React.useRef<HTMLHeadingElement>(null);
 
   const form = useForm<ApplicationValues>({
@@ -82,37 +92,104 @@ export function ApplicationWizard({ initialPosition }: ApplicationWizardProps) {
   const isLast = current === TOTAL_STEPS - 1;
   const isReview = step.id === "review";
 
+  /*
+   * The banner is about the last Next press, not a standing state. Gating it
+   * on live errors means it disappears the moment the applicant fixes them —
+   * react-hook-form re-validates touched fields on change — without needing a
+   * subscription to every keystroke.
+   */
+  const stepHasErrors = step.fields.some(
+    (f) => f.split(".")[0] in form.formState.errors,
+  );
+  const showBlockedBanner = blockedCount > 0 && stepHasErrors;
+
   const goTo = React.useCallback((index: number) => {
     setCurrent(index);
     setFurthest((f) => Math.max(f, index));
+    setBlockedCount(0);
     window.scrollTo({ top: 0, behavior: "smooth" });
     // Focus the new step's heading so screen readers land in the right place.
     requestAnimationFrame(() => headingRef.current?.focus());
   }, []);
 
-  /*
-   * DEMO: Next never blocks. The production wizard validates the step's
-   * fields here and refuses to advance; the demo lets a presenter click
-   * straight through an empty form. Fields still show their validation
-   * messages on blur, so the checks remain visible to anyone filling it in.
-   */
-  const handleNext = () => goTo(Math.min(current + 1, TOTAL_STEPS - 1));
+  const handleNext = async () => {
+    const fields = step.fields as FieldPath<ApplicationValues>[];
+    const valid = fields.length === 0 || (await form.trigger(fields));
+
+    if (!valid) {
+      setBlockedCount((c) => c + 1);
+      requestAnimationFrame(() => focusFirstInvalid(panelRef.current));
+      return;
+    }
+    goTo(Math.min(current + 1, TOTAL_STEPS - 1));
+  };
 
   const handleBack = () => goTo(Math.max(current - 1, 0));
 
+  /** Sends the assembled, encrypted payload. Never inspects it after encrypt. */
+  const submit = React.useCallback(
+    async (values: ApplicationValues) => {
+      setSubmitState({ status: "submitting" });
+      try {
+        // 1. Assemble the typed schema into one flat serializable record.
+        const record = toFlatRecord(values);
+
+        // 2. Encrypt to the portal's public key, in the browser. From here on
+        //    the plaintext exists nowhere but this tab.
+        const envelope = await encrypt(record, parsePublicKey(portalPublicKey));
+
+        // 3. Relay ciphertext. Our own server cannot read it either.
+        const response = await fetch("/api/applications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(toSubmission(envelope)),
+        });
+
+        const result = (await response.json()) as {
+          success: boolean;
+          id?: string;
+          error?: string;
+        };
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error ?? "Submission failed.");
+        }
+        setSubmitState({ status: "success", id: result.id ?? "" });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (error) {
+        setSubmitState({
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Something went wrong. Please try again.",
+        });
+      }
+    },
+    [portalPublicKey],
+  );
+
+  /** On a failed full-form validation, jump to the step that owns the error. */
+  const onInvalid = React.useCallback(
+    (errors: Record<string, unknown>) => {
+      const bad = Object.keys(errors)[0];
+      if (!bad) return;
+      const owner = STEPS.findIndex((s) =>
+        s.fields.some((f) => f === bad || f.startsWith(`${bad}.`)),
+      );
+      if (owner >= 0 && owner !== current) {
+        goTo(owner);
+      }
+      requestAnimationFrame(() => focusFirstInvalid(panelRef.current));
+    },
+    [current, goTo],
+  );
+
   /*
-   * DEMO: nothing is assembled, encrypted, or sent. The spinner runs for a
-   * moment so the hand-off feels like the real thing, then the confirmation
-   * screen shows a made-up number. The entered values never leave this tab.
+   * Built inside the handler rather than during render: `onInvalid` reads a
+   * ref, and composing it at render time trips React's refs-during-render rule.
    */
-  const runSubmit = () => {
-    if (submitState.status === "submitting") return;
-    setSubmitState({ status: "submitting" });
-    window.setTimeout(() => {
-      setSubmitState({ status: "success", id: demoConfirmationId() });
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, DEMO_SUBMIT_DELAY_MS);
-  };
+  const runSubmit = () => void form.handleSubmit(submit, onInvalid)();
 
   /** Clears any partial survey answers, then submits. */
   const skipSurveyAndSubmit = () => {
@@ -123,32 +200,20 @@ export function ApplicationWizard({ initialPosition }: ApplicationWizardProps) {
   };
 
   if (submitState.status === "success") {
-    return (
-      <SubmissionConfirmation
-        id={submitState.id}
-        onRestart={() => {
-          form.reset();
-          setCurrent(0);
-          setFurthest(0);
-          setSubmitState({ status: "idle" });
-          window.scrollTo({ top: 0 });
-        }}
-      />
-    );
+    return <SubmissionConfirmation id={submitState.id} />;
   }
 
   return (
     <FormProvider {...form}>
       <div className="flex min-h-dvh flex-col bg-background">
-        <DemoNotice />
         <header className="bg-brand-green-deep">
           <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-5 sm:px-6">
             <div className="mb-4 flex items-center gap-3">
               <Image
-                src="/biztech-logo-reversed.png"
-                alt="Biztech"
-                width={547}
-                height={185}
+                src="/sli-logo-reversed.png"
+                alt="Schmidbauer Lumber, Incorporated"
+                width={188}
+                height={76}
                 priority
                 className="h-9 w-auto shrink-0 sm:h-11"
               />
@@ -193,7 +258,27 @@ export function ApplicationWizard({ initialPosition }: ApplicationWizardProps) {
               <p className="mt-1.5 text-muted-foreground">{step.description}</p>
             </div>
 
-            <div key={step.id} className="animate-in-step">
+            {/* Announced when Next is blocked; also visible as a banner. */}
+            {showBlockedBanner && (
+              <div
+                role="alert"
+                className="mb-5 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive"
+              >
+                Some required fields still need your attention. They&apos;re
+                marked below.
+              </div>
+            )}
+
+            {submitState.status === "error" && (
+              <div
+                role="alert"
+                className="mb-5 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive"
+              >
+                {submitState.message}
+              </div>
+            )}
+
+            <div ref={panelRef} key={step.id} className="animate-in-step">
               {step.id === "personal" && <StepPersonal />}
               {step.id === "position" && <StepPosition />}
               {step.id === "history" && <StepHistory />}
@@ -261,7 +346,7 @@ export function ApplicationWizard({ initialPosition }: ApplicationWizardProps) {
                       type="button"
                       onClick={runSubmit}
                       disabled={submitState.status === "submitting"}
-                      className="h-11 gap-1.5 bg-brand-blue font-semibold text-white hover:bg-brand-blue/90"
+                      className="h-11 gap-1.5 bg-brand-gold font-semibold text-brand-green-deep hover:bg-brand-gold/90"
                     >
                       {submitState.status === "submitting" ? (
                         <>
@@ -283,7 +368,7 @@ export function ApplicationWizard({ initialPosition }: ApplicationWizardProps) {
                       key="next"
                       type="button"
                       onClick={handleNext}
-                      className="h-11 gap-1.5 bg-brand-blue font-semibold text-white hover:bg-brand-blue/90"
+                      className="h-11 gap-1.5 bg-brand-gold font-semibold text-brand-green-deep hover:bg-brand-gold/90"
                     >
                       {isReview ? "Continue" : "Next"}
                       <ArrowRight className="size-4" aria-hidden="true" />
@@ -296,7 +381,8 @@ export function ApplicationWizard({ initialPosition }: ApplicationWizardProps) {
         </main>
 
         <footer className="border-t border-border px-4 py-5 text-center text-xs text-muted-foreground sm:px-6">
-          Biztech · Online Employment Application
+          Schmidbauer Lumber, Inc. · P.O. Box 152, Eureka, CA 95502 ·
+          707-443-7025
           <br />
           An Equal Opportunity Employer
         </footer>
@@ -305,35 +391,16 @@ export function ApplicationWizard({ initialPosition }: ApplicationWizardProps) {
   );
 }
 
-/**
- * Says plainly, on every screen, that this is a demo — so nobody walking
- * through it mistakes the confirmation screen for a real application.
- */
-function DemoNotice() {
-  return (
-    <div className="bg-brand-blue px-4 py-1.5 text-center text-xs font-medium text-white sm:px-6">
-      Demo &mdash; nothing you enter here is submitted or saved.
-    </div>
-  );
-}
-
-function SubmissionConfirmation({
-  id,
-  onRestart,
-}: {
-  id: string;
-  onRestart: () => void;
-}) {
+function SubmissionConfirmation({ id }: { id: string }) {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <DemoNotice />
       <header className="bg-brand-green-deep">
         <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6">
           <Image
-            src="/biztech-logo-reversed.png"
-            alt="Biztech"
-            width={547}
-            height={185}
+            src="/sli-logo-reversed.png"
+            alt="Schmidbauer Lumber, Incorporated"
+            width={188}
+            height={76}
             priority
             className="h-9 w-auto sm:h-11"
           />
@@ -352,8 +419,8 @@ function SubmissionConfirmation({
           Application received
         </h1>
         <p className="mt-3 leading-relaxed text-muted-foreground">
-          Thank you for applying to Biztech. Your application has been
-          submitted and is now with our hiring team.
+          Thank you for applying to Schmidbauer Lumber. Your application has
+          been submitted and is now with our hiring team.
         </p>
         {id && (
           <p className="mt-5 rounded-lg border border-border bg-card px-4 py-3 text-sm">
@@ -362,21 +429,13 @@ function SubmissionConfirmation({
             <span className="font-mono font-medium">{id}</span>
           </p>
         )}
-        <div className="mt-8">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onRestart}
-            className="h-11 gap-1.5"
-          >
-            <RotateCcw className="size-4" aria-hidden="true" />
-            Start the demo over
-          </Button>
-        </div>
+        <p className="mt-5 text-sm text-muted-foreground">
+          Questions? Call us at 707-443-7025.
+        </p>
       </main>
 
       <footer className="border-t border-border px-4 py-5 text-center text-xs text-muted-foreground sm:px-6">
-        Biztech · An Equal Opportunity Employer
+        Schmidbauer Lumber, Inc. · An Equal Opportunity Employer
       </footer>
     </div>
   );

@@ -7,8 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-brand-blue: var(--brand-blue);
-  --color-brand-blue-light: var(--brand-blue-light);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-deep: var(--brand-gold-deep);
   --color-brand-green: var(--brand-green);
   --color-brand-green-deep: var(--brand-green-deep);
   --color-brand-green-light: var(--brand-green-light);
@@ -55,20 +55,21 @@
 }
 
 /*
- * Biztech brand tokens, sampled from assets/biztech.png.
- *   green (Tech)  #1A4321   blue (biz)  #164679
+ * Schmidbauer Lumber brand tokens, sampled from assets/sli-logo-color.png.
+ *   gold        #FCCC24   green        #24843C
+ *   deep green  #306030   light green  #90CC60
  *
- * Green is structure: the header band, headings, selected states. Blue is the
- * primary action and always carries white text. --brand-blue-light is the
- * progress bar — the logo blue is too dark to read on the green band.
+ * Gold is a light color: it never carries white text. Anything on gold takes
+ * --brand-green-deep or near-black. Gold's role is progress and primary action;
+ * green's role is structure. See PRODUCT.md > Brand Commitments.
  */
 :root {
-  --brand-blue: oklch(0.405 0.1 254);
-  --brand-blue-light: oklch(0.8 0.09 245);
-  --brand-green: oklch(0.47 0.1 146);
-  --brand-green-deep: oklch(0.355 0.075 146);
-  --brand-green-light: oklch(0.76 0.11 146);
-  --brand-green-tint: oklch(0.965 0.016 146);
+  --brand-gold: oklch(0.855 0.163 89.5);
+  --brand-gold-deep: oklch(0.72 0.152 78);
+  --brand-green: oklch(0.539 0.144 148.6);
+  --brand-green-deep: oklch(0.436 0.096 147.5);
+  --brand-green-light: oklch(0.79 0.145 137.5);
+  --brand-green-tint: oklch(0.968 0.018 148);
 
   --background: oklch(0.985 0.004 120);
   --foreground: oklch(0.185 0.012 150);
@@ -76,18 +77,18 @@
   --card-foreground: oklch(0.185 0.012 150);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.185 0.012 150);
-  --primary: oklch(0.47 0.1 146);
+  --primary: oklch(0.539 0.144 148.6);
   --primary-foreground: oklch(0.99 0.005 120);
   --secondary: oklch(0.968 0.018 148);
-  --secondary-foreground: oklch(0.355 0.075 146);
+  --secondary-foreground: oklch(0.436 0.096 147.5);
   --muted: oklch(0.965 0.006 140);
   --muted-foreground: oklch(0.505 0.018 150);
   --accent: oklch(0.968 0.018 148);
-  --accent-foreground: oklch(0.355 0.075 146);
+  --accent-foreground: oklch(0.436 0.096 147.5);
   --destructive: oklch(0.523 0.207 27.3);
   --border: oklch(0.905 0.01 145);
   --input: oklch(0.888 0.012 145);
-  --ring: oklch(0.47 0.1 146);
+  --ring: oklch(0.539 0.144 148.6);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);

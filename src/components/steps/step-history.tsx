@@ -13,7 +13,7 @@ export function StepHistory() {
     <div className="grid gap-5">
       <YesNoField
         name="previouslyEmployedByCompany"
-        label="Have you ever worked for Biztech before?"
+        label="Have you ever worked for Schmidbauer Lumber before?"
       />
 
       {workedHere && (
@@ -34,7 +34,7 @@ export function StepHistory() {
 
       <YesNoField
         name="relatedToCompanyEmployee"
-        label="Are you related to anyone who works at Biztech?"
+        label="Are you related to anyone who works at Schmidbauer Lumber?"
         hint="This doesn't affect your application — we ask for transparency only."
       />
 

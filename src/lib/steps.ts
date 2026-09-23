@@ -75,7 +75,7 @@ export const STEPS: StepDefinition[] = [
   },
   {
     id: "history",
-    label: "Schmidbauer History",
+    label: "Biztech History",
     shortLabel: "History",
     description: "Any prior connection to the company.",
     fields: [
